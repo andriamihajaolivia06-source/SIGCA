@@ -16,16 +16,14 @@ export const login = async (credentials) => {
   const response = await api.post("/auth/login", credentials);
   
   if (response.data.success && response.data.user) {
-   
     localStorage.setItem("user", JSON.stringify(response.data.user));
     localStorage.setItem("token", response.data.user.token);
     
-   
     const role = response.data.user.role;
     const redirectMap = {
       "admin": "/admin",
       "secretaire": "/secretary",
-      "verificateur": "/verifier",
+      "verificateur": "/verificateur",
       "delegue": "/delegate",
       "responsable": "/responsible"
     };
