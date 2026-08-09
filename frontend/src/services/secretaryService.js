@@ -7,7 +7,6 @@ const api = axios.create({
   },
 });
 
-
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -20,7 +19,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
-
 
 api.interceptors.response.use(
   (response) => response,
@@ -63,3 +61,26 @@ export const searchDEF = async (idDelegation, searchTerm, annee) => {
   return response.data;
 };
 
+export const validateEngagements = async (data) => {
+  const response = await api.post("/secretary/validate", data);
+  return response.data;
+};
+
+export const getValidatedEngagements = async (immatricule, annee) => {
+  const response = await api.get("/secretary/validated-engagements", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const closeEngagements = async (data) => {
+  const response = await api.post("/secretary/close-engagements", data);
+  return response.data;
+};
+
+export const getClosedEngagements = async (immatricule, annee) => {
+  const response = await api.get("/secretary/closed-engagements", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
