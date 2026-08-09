@@ -92,7 +92,6 @@ class SecretaryController extends ResourceController
         try {
             $db = db_connect();
 
-            // Récupérer le cf_code
             $delegation = $db->table('delegation')
                 ->select('cf_code')
                 ->where('id_delegation', $idDelegation)
@@ -109,12 +108,10 @@ class SecretaryController extends ResourceController
             $cfCode = trim($delegation['cf_code']);
             $search = trim($search);
 
-            // Si la recherche est plus longue que 5 caractères, prendre les 5 derniers
             if (strlen($search) > 5) {
                 $search = substr($search, -5);
             }
 
-            // Étape 1: Trouver le(s) BDEF par les 5 derniers caractères
             $queryBdef = "
                 SELECT DISTINCT bdef
                 FROM engagement
@@ -136,34 +133,35 @@ class SecretaryController extends ResourceController
                 ]);
             }
 
-            // Récupérer tous les bdef trouvés
             $bdefList = array_column($bdefResults, 'bdef');
             $placeholders = implode(',', array_fill(0, count($bdefList), '?'));
 
-            // Étape 2: Récupérer TOUS les engagements (numDef) liés à ces BDEF
             $queryEngagements = "
                 SELECT 
-                    id_eng,
-                    bdef,
-                    \"numDef\",
-                    objet,
-                    montant,
-                    \"dateEngagement\",
-                    \"etatEng\",
-                    \"tiersNom\",
-                    exercice,
-                    ministere
-                FROM engagement
-                WHERE cf_code = ?
-                  AND exercice = ?
-                  AND bdef IN ({$placeholders})
-                ORDER BY \"dateEngagement\" DESC NULLS LAST
+                    e.id_eng,
+                    e.bdef,
+                    e.\"numDef\",
+                    e.objet,
+                    e.montant,
+                    e.\"dateEngagement\",
+                    e.\"etatEng\",
+                    e.\"tiersNom\",
+                    e.exercice,
+                    e.ministere
+                FROM engagement e
+                WHERE e.cf_code = ?
+                AND e.exercice = ?
+                AND e.bdef IN ({$placeholders})
+                AND NOT EXISTS (
+                    SELECT 1 FROM secretaire_aller1 sa
+                    WHERE sa.\"numDef\" = e.\"numDef\"
+                )
+                ORDER BY e.\"dateEngagement\" DESC NULLS LAST
             ";
 
             $params = array_merge([$cfCode, $annee], $bdefList);
             $results = $db->query($queryEngagements, $params)->getResultArray();
 
-            // Grouper les résultats par BDEF
             $groupedResults = [];
             foreach ($results as $row) {
                 $bdefKey = trim($row['bdef']);
@@ -252,29 +250,33 @@ class SecretaryController extends ResourceController
 
             $query = "
                 SELECT 
-                    id_eng,
-                    bdef,
-                    \"numDef\",
-                    numdefdeg,
-                    objet,
-                    montant,
-                    \"dateEngagement\",
-                    \"etatEng\",
-                    \"tiersNom\",
-                    exercice,
-                    ministere,
+                    e.id_eng,
+                    e.bdef,
+                    e.\"numDef\",
+                    e.numdefdeg,
+                    e.objet,
+                    e.montant,
+                    e.\"dateEngagement\",
+                    e.\"etatEng\",
+                    e.\"tiersNom\",
+                    e.exercice,
+                    e.ministere,
                     CASE 
-                        WHEN numdefdeg IS NOT NULL AND numdefdeg != '' THEN 'DEG'
+                        WHEN e.numdefdeg IS NOT NULL AND e.numdefdeg != '' THEN 'DEG'
                         ELSE 'DEF'
                     END as type_document
-                FROM engagement
-                WHERE cf_code = ?
-                  AND exercice = ?
-                  AND (
-                      (\"numDef\" IS NOT NULL AND \"numDef\" != '')
-                      OR 
-                      (numdefdeg IS NOT NULL AND numdefdeg != '')
-                  )
+                FROM engagement e
+                WHERE e.cf_code = ?
+                AND e.exercice = ?
+                AND (
+                    (e.\"numDef\" IS NOT NULL AND e.\"numDef\" != '')
+                    OR 
+                    (e.numdefdeg IS NOT NULL AND e.numdefdeg != '')
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM secretaire_aller1 sa
+                    WHERE sa.\"numDef\" = e.\"numDef\"
+                )
             ";
 
             $params = [$cfCode, $annee];
@@ -326,5 +328,357 @@ class SecretaryController extends ResourceController
         }
     }
 
-    
+    /**
+     * Valider les engagements sélectionnés
+     * POST /api/secretary/validate
+     */
+    public function validateEngagements()
+    {
+        $data = $this->request->getJSON(true);
+
+        $immatricule = $data['immatricule'] ?? null;
+        $annee = $data['annee'] ?? null;
+        $email = $data['email'] ?? null;
+        $selectedEngagements = $data['selectedEngagements'] ?? [];
+
+        if (empty($selectedEngagements)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Aucun engagement sélectionné'
+            ]);
+        }
+
+        if (!$immatricule || !$annee) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Immatricule et année requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            $user = $db->query("
+                SELECT *
+                FROM user_multiple
+                WHERE TRIM(im_utilisateur) = ?
+                  AND TRIM(exercice) = ?
+                  AND TRIM(etat) = 'actif'
+                LIMIT 1
+            ", [$immatricule, $annee])->getRowArray();
+
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Utilisateur non trouvé'
+                ]);
+            }
+
+            $loginReception = trim($user['im_utilisateur']);
+            $dateReception = date('Y-m-d H:i:s');
+
+            // 1. Insérer l'email dans tbl_mail si fourni
+            if (!empty($email)) {
+                foreach ($selectedEngagements as $engagement) {
+                    $existing = $db->table('tbl_mail')
+                        ->where('numDef', $engagement['numDef'] ?? '')
+                        ->where('adresse_mail', $email)
+                        ->get()
+                        ->getRowArray();
+
+                    if (!$existing) {
+                        $db->table('tbl_mail')->insert([
+                            'numDef' => $engagement['numDef'] ?? '',
+                            'adresse_mail' => $email,
+                            'etat_email' => 0
+                        ]);
+                    }
+                }
+            }
+
+            // 2. Insérer les engagements dans secretaire_aller1
+            foreach ($selectedEngagements as $engagement) {
+                $numDef = $engagement['numDef'] ?? '';
+
+                $last6 = substr($numDef, -6);
+                $refCFGenerated = 'refCF' . $annee . $last6;
+
+                $existing = $db->table('secretaire_aller1')
+                    ->where('numDef', $numDef)
+                    ->get()
+                    ->getRowArray();
+
+                if (!$existing) {
+                    $db->table('secretaire_aller1')->insert([
+                        'id_eng' => $engagement['id'] ?? 0,
+                        'numDef' => $numDef,
+                        'refCF' => $refCFGenerated,
+                        'soumission' => 1,
+                        'loginReception1' => $loginReception,
+                        'dateReception1' => $dateReception,
+                        'etatSecVerif' => 'En attente',
+                        'loginCloture' => '',
+                        'dateCloture' => null,
+                        'etatVerif' => 0,
+                        'type' => 'eng',
+                        'loginReceptionSec' => '',
+                        'dateReceptionSec' => null,
+                        'loginClotureSec' => '',
+                        'dateClotureSec' => null,
+                        'etatSecSigfp' => '',
+                        'etatSigfp2' => 0,
+                        'nomservice' => '',
+                        'dateReceptionService' => null
+                    ]);
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Validation effectuée avec succès',
+                'total' => count($selectedEngagements),
+                'email_sent' => !empty($email)
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Récupérer les engagements validés pour l'envoi vers vérificateur
+     * GET /api/secretary/validated-engagements
+     */
+    public function getValidatedEngagements()
+    {
+        $immatricule = $this->request->getGet('immatricule');
+        $annee = $this->request->getGet('annee');
+
+        if (!$immatricule || !$annee) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Immatricule et année requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            // Récupérer l'utilisateur pour vérifier son login
+            $user = $db->query("
+                SELECT *
+                FROM user_multiple
+                WHERE TRIM(im_utilisateur) = ?
+                  AND TRIM(exercice) = ?
+                  AND TRIM(etat) = 'actif'
+                LIMIT 1
+            ", [$immatricule, $annee])->getRowArray();
+
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Utilisateur non trouvé'
+                ]);
+            }
+
+            $loginReception = trim($user['im_utilisateur']);
+
+            // Requête avec guillemets doubles pour PostgreSQL (case sensitive)
+            $query = "
+                SELECT 
+                    sa.\"id_secretaire\",
+                    sa.\"id_eng\",
+                    sa.\"numDef\",
+                    sa.\"refCF\",
+                    sa.\"soumission\",
+                    sa.\"loginReception1\",
+                    sa.\"dateReception1\",
+                    sa.\"etatSecVerif\",
+                    sa.\"etatVerif\",
+                    sa.\"type\",
+                    sa.\"loginCloture\",
+                    sa.\"dateCloture\",
+                    e.\"bdef\",
+                    e.\"objet\",
+                    e.\"montant\",
+                    e.\"exercice\"
+                FROM \"secretaire_aller1\" sa
+                LEFT JOIN \"engagement\" e ON sa.\"numDef\" = e.\"numDef\"
+                WHERE sa.\"loginReception1\" = ?
+                  AND sa.\"etatSecVerif\" = 'En attente'
+                  AND sa.\"etatVerif\" = 0
+                ORDER BY sa.\"dateReception1\" DESC
+            ";
+
+            $results = $db->query($query, [$loginReception])->getResultArray();
+
+            return $this->response->setJSON([
+                'success' => true,
+                'results' => $results,
+                'count' => count($results),
+                'loginReception' => $loginReception
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Clôturer les engagements vers le vérificateur
+     * POST /api/secretary/close-engagements
+     */
+    public function closeEngagements()
+    {
+        $data = $this->request->getJSON(true);
+
+        $immatricule = $data['immatricule'] ?? null;
+        $annee = $data['annee'] ?? null;
+        $selectedEngagements = $data['selectedEngagements'] ?? [];
+
+        if (empty($selectedEngagements)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Aucun engagement sélectionné'
+            ]);
+        }
+
+        if (!$immatricule || !$annee) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Immatricule et année requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            $clotureCount = 0;
+            $dateCloture = date('Y-m-d H:i:s');
+
+            foreach ($selectedEngagements as $engagement) {
+                $idSecretaire = $engagement['id_secretaire'] ?? null;
+                $numDef = $engagement['numDef'] ?? '';
+
+                if (!$idSecretaire && !$numDef) {
+                    continue;
+                }
+
+                $updateData = [
+                    'etatSecVerif' => 'Cloturer',
+                    'etatVerif' => 1,
+                    'loginCloture' => $immatricule,
+                    'dateCloture' => $dateCloture
+                ];
+
+                if ($idSecretaire) {
+                    $db->table('secretaire_aller1')
+                        ->where('id_secretaire', $idSecretaire)
+                        ->update($updateData);
+                } else if ($numDef) {
+                    $db->table('secretaire_aller1')
+                        ->where('numDef', $numDef)
+                        ->update($updateData);
+                }
+                
+                $clotureCount++;
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Clôture effectuée avec succès',
+                'total' => $clotureCount
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+        public function getClosedEngagements()
+    {
+        $immatricule = $this->request->getGet('immatricule');
+        $annee = $this->request->getGet('annee');
+
+        if (!$immatricule || !$annee) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Immatricule et année requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            // Récupérer l'utilisateur pour vérifier son login
+            $user = $db->query("
+                SELECT *
+                FROM user_multiple
+                WHERE TRIM(im_utilisateur) = ?
+                  AND TRIM(exercice) = ?
+                  AND TRIM(etat) = 'actif'
+                LIMIT 1
+            ", [$immatricule, $annee])->getRowArray();
+
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Utilisateur non trouvé'
+                ]);
+            }
+
+            $loginReception = trim($user['im_utilisateur']);
+
+            // Requête pour récupérer les engagements clôturés
+            $query = "
+                SELECT 
+                    sa.\"id_secretaire\",
+                    sa.\"id_eng\",
+                    sa.\"numDef\",
+                    sa.\"refCF\",
+                    sa.\"soumission\",
+                    sa.\"loginReception1\",
+                    sa.\"dateReception1\",
+                    sa.\"etatSecVerif\",
+                    sa.\"etatVerif\",
+                    sa.\"type\",
+                    sa.\"loginCloture\",
+                    sa.\"dateCloture\",
+                    e.\"bdef\",
+                    e.\"objet\",
+                    e.\"montant\",
+                    e.\"exercice\"
+                FROM \"secretaire_aller1\" sa
+                LEFT JOIN \"engagement\" e ON sa.\"numDef\" = e.\"numDef\"
+                WHERE sa.\"loginReception1\" = ?
+                  AND sa.\"etatSecVerif\" = 'Cloturer'
+                  AND sa.\"etatVerif\" = 1
+                ORDER BY sa.\"dateCloture\" DESC
+            ";
+
+            $results = $db->query($query, [$loginReception])->getResultArray();
+
+            return $this->response->setJSON([
+                'success' => true,
+                'results' => $results,
+                'count' => count($results),
+                'loginReception' => $loginReception
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
 }
