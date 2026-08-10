@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import SecretaryDashboard from "./pages/Secretary/SecretaryDashboard";
-
+import VerificateurDashboard from "./pages/Verificateur/VerificateurDashboard";
 
 function PrivateRoute({ children, requiredRole }) {
   const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -11,7 +11,7 @@ function PrivateRoute({ children, requiredRole }) {
   }
   
   if (requiredRole && user.role !== requiredRole) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/" replace />;
   }
   
   return children;
@@ -30,7 +30,14 @@ function App() {
             </PrivateRoute>
           } 
         />
-        {/* Route par défaut pour les chemins non trouvés */}
+        <Route 
+          path="/verificateur" 
+          element={
+            <PrivateRoute requiredRole="verificateur">
+              <VerificateurDashboard />
+            </PrivateRoute>
+          } 
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
