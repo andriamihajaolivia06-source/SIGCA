@@ -26,3 +26,9 @@ $routes->get('api/verificateur/received-engagements', 'VerificateurController::g
 $routes->get('api/verificateur/engagement-details', 'VerificateurController::getEngagementDetails');
 $routes->get('api/verificateur/motifs', 'VerificateurController::getMotifs');
 $routes->post('api/verificateur/save-verification', 'VerificateurController::saveVerification');
+
+// Routes du délégué
+$routes->get('api/delegate/delegations', 'DelegateController::delegations');
+$routes->get('api/delegate/search-closed', 'DelegateController::searchClosed');
+$routes->post('api/delegate/reception', 'DelegateController::reception');
+$routes->get('api/delegate/received-engagements', 'DelegateController::getReceivedEngagements');
