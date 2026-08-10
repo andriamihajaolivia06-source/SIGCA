@@ -49,3 +49,32 @@ export const searchClosedEngagements = async (idDelegation, search, annee) => {
   });
   return response.data;
 };
+
+export const receptionEngagements = async (data) => {
+  const response = await api.post("/verificateur/reception", data);
+  return response.data;
+};
+
+export const getReceivedEngagements = async (immatricule, annee) => {
+  const response = await api.get("/verificateur/received-engagements", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const getEngagementDetails = async (numDef) => {
+  const response = await api.get("/verificateur/engagement-details", {
+    params: { numDef }
+  });
+  return response.data;
+};
+
+export const getMotifs = async () => {
+  const response = await api.get("/verificateur/motifs");
+  return response.data;
+};
+
+export const saveVerification = async (data) => {
+  const response = await api.post("/verificateur/save-verification", data);
+  return response.data;
+};
