@@ -479,7 +479,36 @@ class VerificateurController extends ResourceController
                 ]);
             }
 
-            // 3. Mettre à jour secretaire_aller1
+            // 3. Insérer les pièces cochées dans tbl_verifcloture
+            $pieces = $forme['pieces'] ?? [];
+            foreach ($pieces as $piece) {
+                if ($piece['checked'] ?? false) {
+                    // Récupérer les informations de la pièce depuis la table piece
+                    $pieceInfo = $db->table('piece')
+                        ->select('pj, id_pcop')
+                        ->where('id_piece', $piece['id_piece'])
+                        ->get()
+                        ->getRowArray();
+
+                    // Vérifier si la pièce existe déjà pour cet engagement
+                    $existing = $db->table('tbl_verifcloture')
+                        ->where('engverifcloture', $numDef)
+                        ->where('id_piece', $piece['id_piece'])
+                        ->get()
+                        ->getRowArray();
+
+                    if (!$existing) {
+                        $db->table('tbl_verifcloture')->insert([
+                            'engverifcloture' => $numDef,
+                            'id_piece' => $piece['id_piece'],
+                            'piecejustificative' => $pieceInfo['pj'] ?? '',
+                            'id_pcop' => $pieceInfo['id_pcop'] ?? 0
+                        ]);
+                    }
+                }
+            }
+
+            // 4. Mettre à jour secretaire_aller1
             $db->table('secretaire_aller1')
                 ->where('id_secretaire', $idSecretaire)
                 ->update([
