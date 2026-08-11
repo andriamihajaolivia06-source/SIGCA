@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import SecretaryDashboard from "./pages/Secretary/SecretaryDashboard";
 import VerificateurDashboard from "./pages/Verificateur/VerificateurDashboard";
+import DelegateDashboard from "./pages/Delegate/DelegateDashboard";
 
 function PrivateRoute({ children, requiredRole }) {
   const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -35,6 +36,14 @@ function App() {
           element={
             <PrivateRoute requiredRole="verificateur">
               <VerificateurDashboard />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/delegate" 
+          element={
+            <PrivateRoute requiredRole="delegue">
+              <DelegateDashboard />
             </PrivateRoute>
           } 
         />
