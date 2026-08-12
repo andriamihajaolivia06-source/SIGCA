@@ -301,4 +301,273 @@ class DelegateController extends ResourceController
             ]);
         }
     }
+
+
+public function getNonClosedBySecretary()
+{
+    $immatricule = $this->request->getGet('immatricule');
+    $annee = $this->request->getGet('annee');
+
+    if (!$immatricule || !$annee) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Immatricule et année requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        $user = $db->query("
+            SELECT cf_code FROM user_multiple
+            WHERE TRIM(im_utilisateur) = ? AND TRIM(exercice) = ?
+            LIMIT 1
+        ", [$immatricule, $annee])->getRowArray();
+
+        if (!$user) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Utilisateur non trouvé'
+            ]);
+        }
+
+        // cf_code de user_multiple contient en réalité des id_delegation (ex: "47" ou "51,5")
+        $idDelegations = array_map('trim', explode(',', $user['cf_code']));
+        $idDelegations = array_filter($idDelegations);
+        $idDelegations = array_map('intval', $idDelegations);
+
+        if (empty($idDelegations)) {
+            return $this->response->setJSON(['success' => true, 'results' => [], 'count' => 0]);
+        }
+
+        $idPlaceholders = implode(',', array_fill(0, count($idDelegations), '?'));
+        $delegations = $db->query("
+            SELECT cf_code FROM delegation WHERE id_delegation IN ({$idPlaceholders})
+        ", $idDelegations)->getResultArray();
+
+        $cfCodes = array_filter(array_map(fn($d) => trim($d['cf_code']), $delegations));
+
+        if (empty($cfCodes)) {
+            return $this->response->setJSON(['success' => true, 'results' => [], 'count' => 0]);
+        }
+
+        $cfPlaceholders = implode(',', array_fill(0, count($cfCodes), '?'));
+
+        $query = "
+            SELECT 
+                sa.\"id_secretaire\",
+                sa.\"numDef\",
+                sa.\"refCF\",
+                sa.\"loginReception1\",
+                sa.\"dateReception1\",
+                sa.\"etatSecVerif\",
+                sa.\"etatVerif\",
+                e.\"bdef\",
+                e.\"objet\",
+                e.\"montant\",
+                e.\"exercice\"
+            FROM \"secretaire_aller1\" sa
+            LEFT JOIN \"engagement\" e ON sa.\"numDef\" = e.\"numDef\"
+            WHERE TRIM(e.\"cf_code\") IN ({$cfPlaceholders})
+              AND e.\"exercice\" = ?
+              AND sa.\"etatVerif\" = 0
+            ORDER BY sa.\"dateReception1\" DESC
+        ";
+
+        $params = array_merge($cfCodes, [$annee]);
+        $results = $db->query($query, $params)->getResultArray();
+
+        return $this->response->setJSON([
+            'success' => true,
+            'results' => $results,
+            'count' => count($results)
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function getNonClosedByVerificateur()
+{
+    $immatricule = $this->request->getGet('immatricule');
+    $annee = $this->request->getGet('annee');
+
+    if (!$immatricule || !$annee) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Immatricule et année requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        $user = $db->query("
+            SELECT cf_code FROM user_multiple
+            WHERE TRIM(im_utilisateur) = ? AND TRIM(exercice) = ?
+            LIMIT 1
+        ", [$immatricule, $annee])->getRowArray();
+
+        if (!$user) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Utilisateur non trouvé'
+            ]);
+        }
+
+        $idDelegations = array_map('trim', explode(',', $user['cf_code']));
+        $idDelegations = array_filter($idDelegations);
+        $idDelegations = array_map('intval', $idDelegations);
+
+        if (empty($idDelegations)) {
+            return $this->response->setJSON(['success' => true, 'results' => [], 'count' => 0]);
+        }
+
+        $idPlaceholders = implode(',', array_fill(0, count($idDelegations), '?'));
+        $delegations = $db->query("
+            SELECT cf_code FROM delegation WHERE id_delegation IN ({$idPlaceholders})
+        ", $idDelegations)->getResultArray();
+
+        $cfCodes = array_filter(array_map(fn($d) => trim($d['cf_code']), $delegations));
+
+        if (empty($cfCodes)) {
+            return $this->response->setJSON(['success' => true, 'results' => [], 'count' => 0]);
+        }
+
+        $cfPlaceholders = implode(',', array_fill(0, count($cfCodes), '?'));
+
+        $query = "
+            SELECT 
+                v.\"id_verif\",
+                v.\"numDef\",
+                v.\"loginReception\",
+                v.\"dateReception\",
+                v.\"etatVerifDel\",
+                sa.\"refCF\",
+                e.\"bdef\",
+                e.\"objet\",
+                e.\"montant\",
+                e.\"exercice\"
+            FROM \"verif_aller1\" v
+            LEFT JOIN \"secretaire_aller1\" sa ON v.\"id_secretaire\" = sa.\"id_secretaire\"
+            LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
+            WHERE TRIM(e.\"cf_code\") IN ({$cfPlaceholders})
+              AND e.\"exercice\" = ?
+              AND v.\"etatVerifDel\" = 'Noncloturer'
+            ORDER BY v.\"dateReception\" DESC
+        ";
+
+        $params = array_merge($cfCodes, [$annee]);
+        $results = $db->query($query, $params)->getResultArray();
+
+        return $this->response->setJSON([
+            'success' => true,
+            'results' => $results,
+            'count' => count($results)
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+   public function getVerificationDetails()
+    {
+        $numDef = $this->request->getGet('numDef');
+
+        if (!$numDef) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Numéro DEF requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            // 1. Récupérer la vérification depuis verif_aller1
+            $verification = $db->query("
+                SELECT 
+                    v.\"id_verif\",
+                    v.\"id_secretaire\",
+                    v.\"numDef\",
+                    v.\"loginReception\",
+                    v.\"dateReception\",
+                    v.\"forme\",
+                    v.\"fond\",
+                    v.\"proposition\",
+                    v.\"observations\",
+                    v.\"loginCloture\",
+                    v.\"dateCloture\",
+                    v.\"etatVerifDel\",
+                    sa.\"refCF\",
+                    e.\"bdef\",
+                    e.\"objet\",
+                    e.\"montant\",
+                    e.\"exercice\"
+                FROM \"verif_aller1\" v
+                LEFT JOIN \"secretaire_aller1\" sa ON v.\"id_secretaire\" = sa.\"id_secretaire\"
+                LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
+                WHERE v.\"numDef\" = ?
+                LIMIT 1
+            ", [$numDef])->getRowArray();
+
+            if (!$verification) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'verification' => null,
+                    'pieces' => [],
+                    'motifs' => []
+                ]);
+            }
+
+            // 2. Récupérer les pièces vérifiées depuis tbl_verifcloture
+            $pieces = $db->query("
+                SELECT 
+                    vc.\"id_piece\",
+                    p.\"pj\"
+                FROM \"tbl_verifcloture\" vc
+                LEFT JOIN \"piece\" p ON vc.\"id_piece\" = p.\"id_piece\"
+                WHERE vc.\"engverifcloture\" = ?
+            ", [$numDef])->getResultArray();
+
+            // Formater les pièces avec checked = true
+            $formattedPieces = array_map(function($p) {
+                return [
+                    'id_piece' => $p['id_piece'],
+                    'pj' => $p['pj'] ?? 'Pièce',
+                    'checked' => true
+                ];
+            }, $pieces);
+
+            // 3. Récupérer les motifs sélectionnés depuis temp_motif
+            $motifIds = $db->query("
+                SELECT \"id_motif\" FROM \"temp_motif\" WHERE \"numDef\" = ?
+            ", [$numDef])->getResultArray();
+            $motifIds = array_column($motifIds, 'id_motif');
+
+            // 4. Récupérer tous les motifs pour les labels
+            $allMotifs = $db->table('motif')
+                ->orderBy('id_motif', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            // Ajouter les motifs à la vérification
+            $verification['motif_ids'] = $motifIds;
+
+            return $this->response->setJSON([
+                'success' => true,
+                'verification' => $verification,
+                'pieces' => $formattedPieces,
+                'motifs' => $allMotifs
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
 }

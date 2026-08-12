@@ -5,6 +5,8 @@ import logoDGCF from "../../assets/logo-dgcf.png";
 import DelegationSelector from "../Secretary/components/DelegationSelector";
 import DelegateSidebar from "./components/DelegateSidebar";
 import EngagementsRecusDelegue from "./components/EngagementsRecusDelegue";
+import EngagementsNonCloturesSecretaire from "./components/EngagementsNonCloturesSecretaire";
+import EngagementsNonCloturesVerificateur from "./components/EngagementsNonCloturesVerificateur";
 
 function DelegateDashboard() {
   const navigate = useNavigate();
@@ -174,14 +176,21 @@ function DelegateDashboard() {
       "En attente": "bg-yellow-100 text-yellow-700",
       "Rejete": "bg-red-100 text-red-700",
       "Verifie": "bg-blue-100 text-blue-700",
+      "DEF": "bg-green-100 text-green-700",
     };
     const color = colors[status] || "bg-gray-100 text-gray-700";
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {status || "Cloturer"}
+        {status || "En attente"}
       </span>
     );
   };
+
+  // Définition des onglets pour le navbar
+  const navTabs = [
+    { id: "nonclotures_secretaire", label: "Non clôturés (Secrétaire)" },
+    { id: "nonclotures_verificateur", label: "Non vérifiés (Vérificateur)" },
+  ];
 
   const renderContent = () => {
     switch (activeTab) {
@@ -324,6 +333,12 @@ function DelegateDashboard() {
           </>
         );
 
+      case "nonclotures_secretaire":
+        return <EngagementsNonCloturesSecretaire user={user} />;
+
+      case "nonclotures_verificateur":
+        return <EngagementsNonCloturesVerificateur user={user} />;
+
       case "recus":
         return <EngagementsRecusDelegue user={user} />;
 
@@ -348,8 +363,9 @@ function DelegateDashboard() {
       <DelegateSidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <div className="flex-1 min-h-screen">
+        {/* Header avec navbar */}
         <header className="bg-[#0B1F44] text-white shadow-lg sticky top-0 z-20">
-          <div className="px-4 py-4">
+          <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src={logoDGCF} alt="Logo" className="h-10 w-10 object-contain" />
@@ -366,6 +382,27 @@ function DelegateDashboard() {
                   {user?.role} • Année {user?.annee}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Navbar avec les liens */}
+          <div className="bg-[#122a5c] px-4 py-2">
+            <div className="flex flex-wrap gap-2">
+              {navTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    px-4 py-1.5 text-sm rounded-lg transition-colors
+                    ${activeTab === tab.id 
+                      ? "bg-[#6FAE4F] text-white" 
+                      : "text-gray-300 hover:text-white hover:bg-white/10"
+                    }
+                  `}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
         </header>

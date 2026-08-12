@@ -32,3 +32,6 @@ $routes->get('api/delegate/delegations', 'DelegateController::delegations');
 $routes->get('api/delegate/search-closed', 'DelegateController::searchClosed');
 $routes->post('api/delegate/reception', 'DelegateController::reception');
 $routes->get('api/delegate/received-engagements', 'DelegateController::getReceivedEngagements');
+$routes->get('api/delegate/non-closed-secretary', 'DelegateController::getNonClosedBySecretary');
+$routes->get('api/delegate/non-closed-verificateur', 'DelegateController::getNonClosedByVerificateur');
+$routes->get('api/delegate/verification-details', 'DelegateController::getVerificationDetails');

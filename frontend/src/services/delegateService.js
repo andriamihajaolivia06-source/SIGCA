@@ -61,3 +61,24 @@ export const getReceivedEngagements = async (immatricule, annee) => {
   });
   return response.data;
 };
+
+export const getNonClosedBySecretary = async (immatricule, annee) => {
+  const response = await api.get("/delegate/non-closed-secretary", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const getNonClosedByVerificateur = async (immatricule, annee) => {
+  const response = await api.get("/delegate/non-closed-verificateur", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const getVerificationDetails = async (numDef) => {
+  const response = await api.get("/delegate/verification-details", {
+    params: { numDef }
+  });
+  return response.data;
+};

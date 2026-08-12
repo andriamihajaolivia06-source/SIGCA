@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
-import { getReceivedEngagements } from "../../../services/delegateService";
-import LireVerification from "./LireVerification";
+import { getNonClosedBySecretary } from "../../../services/delegateService";
 
-function EngagementsRecusDelegue({ user }) {
+function EngagementsNonCloturesSecretaire({ user }) {
   const [loading, setLoading] = useState(false);
   const [engagements, setEngagements] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedEngagement, setSelectedEngagement] = useState(null);
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -18,13 +15,13 @@ function EngagementsRecusDelegue({ user }) {
   const loadEngagements = async () => {
     setLoading(true);
     try {
-      const data = await getReceivedEngagements(
+      const data = await getNonClosedBySecretary(
         user?.immatricule,
         user?.annee
       );
       setEngagements(data.results || []);
     } catch (error) {
-      console.error("Erreur chargement engagements reçus:", error);
+      console.error("Erreur chargement engagements:", error);
     } finally {
       setLoading(false);
     }
@@ -34,23 +31,13 @@ function EngagementsRecusDelegue({ user }) {
     setSearchTerm(e.target.value);
   };
 
-  const handleLire = (engagement) => {
-    setSelectedEngagement(engagement);
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setSelectedEngagement(null);
-  };
-
   const filteredEngagements = engagements.filter(item => {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
       (item.numDef && item.numDef.toLowerCase().includes(search)) ||
       (item.bdef && item.bdef.toLowerCase().includes(search)) ||
-      (item.refCF && item.refCF.toLowerCase().includes(search))
+      (item.objet && item.objet.toLowerCase().includes(search))
     );
   });
 
@@ -71,13 +58,13 @@ function EngagementsRecusDelegue({ user }) {
 
   const getStatusBadge = (status) => {
     const colors = {
-      "Noncloturer": "bg-yellow-100 text-yellow-700",
+      "En attente": "bg-yellow-100 text-yellow-700",
       "Cloturer": "bg-green-100 text-green-700",
     };
     const color = colors[status] || "bg-gray-100 text-gray-700";
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {status || "Noncloturer"}
+        {status || "En attente"}
       </span>
     );
   };
@@ -87,7 +74,7 @@ function EngagementsRecusDelegue({ user }) {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B1F44]"></div>
-          <span className="ml-3 text-gray-500">Chargement des engagements reçus...</span>
+          <span className="ml-3 text-gray-500">Chargement des engagements...</span>
         </div>
       </div>
     );
@@ -97,8 +84,8 @@ function EngagementsRecusDelegue({ user }) {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[#0B1F44]">Engagements Reçus</h2>
-          <p className="text-gray-500 text-sm">Liste des engagements réceptionnés par le délégué</p>
+          <h2 className="text-2xl font-bold text-[#0B1F44]">Engagements Non Clôturés</h2>
+          <p className="text-gray-500 text-sm">Liste des engagements en attente de clôture par le secrétaire</p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -121,13 +108,13 @@ function EngagementsRecusDelegue({ user }) {
 
       {engagements.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <p className="text-gray-500">Aucun engagement reçu pour le moment.</p>
+          <p className="text-gray-500">Aucun engagement en attente de clôture par le secrétaire.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[#0B1F44]">
-              Engagements reçus ({filteredEngagements.length})
+              Engagements ({filteredEngagements.length})
             </h3>
             <span className="text-sm text-gray-500">
               Total: {engagements.length}
@@ -142,14 +129,14 @@ function EngagementsRecusDelegue({ user }) {
                   <th className="px-4 py-3 text-left font-semibold text-[#0B1F44]">BDEF</th>
                   <th className="px-4 py-3 text-left font-semibold text-[#0B1F44]">Réf CF</th>
                   <th className="px-4 py-3 text-right font-semibold text-[#0B1F44]">Montant</th>
+                  <th className="px-4 py-3 text-left font-semibold text-[#0B1F44]">Objet</th>
                   <th className="px-4 py-3 text-left font-semibold text-[#0B1F44]">Date réception</th>
                   <th className="px-4 py-3 text-left font-semibold text-[#0B1F44]">Statut</th>
-                  <th className="px-4 py-3 text-center font-semibold text-[#0B1F44]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredEngagements.map((item) => (
-                  <tr key={item.id_del} className="hover:bg-gray-50 transition-colors">
+                  <tr key={item.id_secretaire} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-mono text-sm text-gray-700">
                       {item.numDef || "-"}
                     </td>
@@ -162,19 +149,14 @@ function EngagementsRecusDelegue({ user }) {
                     <td className="px-4 py-3 text-right font-medium text-[#0B1F44]">
                       {formatMontant(item.montant)}
                     </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
+                      {item.objet || "-"}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDate(item.dateReception)}
+                      {formatDate(item.dateReception1)}
                     </td>
                     <td className="px-4 py-3">
-                      {getStatusBadge(item.etatDelVerif)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleLire(item)}
-                        className="px-4 py-1.5 bg-[#0B1F44] text-white text-xs rounded-lg hover:bg-[#122a5c] transition-colors"
-                      >
-                        Lire
-                      </button>
+                      {getStatusBadge(item.etatSecVerif)}
                     </td>
                   </tr>
                 ))}
@@ -189,18 +171,8 @@ function EngagementsRecusDelegue({ user }) {
           )}
         </div>
       )}
-
-      {/* Modal pour afficher les détails de la vérification */}
-      {showModal && selectedEngagement && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <LireVerification
-            engagement={selectedEngagement}
-            onClose={handleCloseModal}
-          />
-        </div>
-      )}
     </div>
   );
 }
 
-export default EngagementsRecusDelegue;
+export default EngagementsNonCloturesSecretaire;
