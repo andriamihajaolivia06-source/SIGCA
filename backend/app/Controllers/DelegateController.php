@@ -472,9 +472,127 @@ public function getNonClosedByVerificateur()
     }
 }
 
-   public function getVerificationDetails()
+public function getVerificationDetails()
+{
+    $numDef = $this->request->getGet('numDef');
+
+    if (!$numDef) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Numéro DEF requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        // 1. Récupérer la vérification depuis verif_aller1
+        $verification = $db->query("
+            SELECT 
+                v.\"id_verif\",
+                v.\"id_secretaire\",
+                v.\"numDef\",
+                v.\"loginReception\",
+                v.\"dateReception\",
+                v.\"forme\",
+                v.\"fond\",
+                v.\"proposition\",
+                v.\"observations\",
+                v.\"loginCloture\",
+                v.\"dateCloture\",
+                v.\"etatVerifDel\",
+                sa.\"refCF\",
+                e.\"bdef\",
+                e.\"objet\",
+                e.\"montant\",
+                e.\"exercice\",
+                e.\"compte\"
+            FROM \"verif_aller1\" v
+            LEFT JOIN \"secretaire_aller1\" sa ON v.\"id_secretaire\" = sa.\"id_secretaire\"
+            LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
+            WHERE v.\"numDef\" = ?
+            LIMIT 1
+        ", [$numDef])->getRowArray();
+
+        if (!$verification) {
+            return $this->response->setJSON([
+                'success' => true,
+                'verification' => null,
+                'pieces' => [],
+                'motifs' => []
+            ]);
+        }
+
+        // 2a. Récupérer TOUTES les pièces requises pour le compte de l'engagement
+        $piecesRequises = $db->query("
+            SELECT p.\"id_piece\", p.\"pj\"
+            FROM \"piece\" p
+            INNER JOIN \"pcop\" pc ON p.\"id_pcop\" = pc.\"id_pcop\"
+            WHERE pc.\"compte\" = ?
+        ", [$verification['compte']])->getResultArray();
+
+        // 2b. Récupérer les pièces déjà cochées (clôturées) pour cet engagement
+        $piecesCochees = $db->query("
+            SELECT \"id_piece\" FROM \"tbl_verifcloture\" WHERE \"engverifcloture\" = ?
+        ", [$numDef])->getResultArray();
+        $idsCoches = array_column($piecesCochees, 'id_piece');
+
+        // 2c. Fusionner : chaque pièce requise, cochée ou non
+        $formattedPieces = array_map(function($p) use ($idsCoches) {
+            return [
+                'id_piece' => $p['id_piece'],
+                'pj' => $p['pj'] ?? 'Pièce',
+                'checked' => in_array($p['id_piece'], $idsCoches)
+            ];
+        }, $piecesRequises);
+
+        // 3. Récupérer les motifs sélectionnés depuis temp_motif
+        $motifIds = $db->query("
+            SELECT \"id_motif\" FROM \"temp_motif\" WHERE \"numDef\" = ?
+        ", [$numDef])->getResultArray();
+        $motifIds = array_column($motifIds, 'id_motif');
+
+        // 4. Récupérer tous les motifs pour les labels
+        $allMotifs = $db->table('motif')
+            ->orderBy('id_motif', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        // Ajouter les motifs à la vérification
+        $verification['motif_ids'] = $motifIds;
+
+        return $this->response->setJSON([
+            'success' => true,
+            'verification' => $verification,
+            'pieces' => $formattedPieces,
+            'motifs' => $allMotifs
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+public function saveDecision()
     {
-        $numDef = $this->request->getGet('numDef');
+        $data = $this->request->getJSON(true);
+
+        $numDef = $data['numDef'] ?? null;
+        $loginReception = $data['loginReception'] ?? null;
+        $dateReception = $data['dateReception'] ?? date('Y-m-d');
+        $loginClotureDel = $data['loginClotureDel'] ?? '';
+        $dateClotureDel = $data['dateClotureDel'] ?? date('Y-m-d');
+        $decisionforme = $data['decisionforme'] ?? '';
+        $decisionfond = $data['decisionfond'] ?? '';
+        $decisionfinale = $data['decisionfinale'] ?? '';
+        $decisionObs = $data['decisionObs'] ?? '';
+        $instructions = $data['instructions'] ?? null;
+        $etatDelVerif = $data['etatDelVerif'] ?? 'Cloturer';
+        $etatVerif2 = $data['etatVerif2'] ?? 1;
+        $etat = $data['etat'] ?? 1;
 
         if (!$numDef) {
             return $this->response->setJSON([
@@ -486,87 +604,66 @@ public function getNonClosedByVerificateur()
         try {
             $db = db_connect();
 
-            // 1. Récupérer la vérification depuis verif_aller1
-            $verification = $db->query("
-                SELECT 
-                    v.\"id_verif\",
-                    v.\"id_secretaire\",
-                    v.\"numDef\",
-                    v.\"loginReception\",
-                    v.\"dateReception\",
-                    v.\"forme\",
-                    v.\"fond\",
-                    v.\"proposition\",
-                    v.\"observations\",
-                    v.\"loginCloture\",
-                    v.\"dateCloture\",
-                    v.\"etatVerifDel\",
-                    sa.\"refCF\",
-                    e.\"bdef\",
-                    e.\"objet\",
-                    e.\"montant\",
-                    e.\"exercice\"
-                FROM \"verif_aller1\" v
-                LEFT JOIN \"secretaire_aller1\" sa ON v.\"id_secretaire\" = sa.\"id_secretaire\"
-                LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
-                WHERE v.\"numDef\" = ?
-                LIMIT 1
-            ", [$numDef])->getRowArray();
+            // Tronquer decisionObs à 20 caractères maximum
+            $decisionObs = mb_substr($decisionObs, 0, 20);
 
-            if (!$verification) {
+            // Vérifier si l'engagement existe déjà dans del_aller1
+            $existing = $db->table('del_aller1')
+                ->where('numDef', $numDef)
+                ->get()
+                ->getRowArray();
+
+            if ($existing) {
+                // Mettre à jour l'enregistrement existant
+                $db->table('del_aller1')
+                    ->where('numDef', $numDef)
+                    ->update([
+                        'loginReception' => $loginReception,
+                        'dateReception' => $dateReception,
+                        'loginClotureDel' => $loginClotureDel,
+                        'dateClotureDel' => $dateClotureDel,
+                        'decisionforme' => $decisionforme,
+                        'decisionfond' => $decisionfond,
+                        'decisionfinale' => $decisionfinale,
+                        'decisionObs' => $decisionObs,
+                        'instructions' => $instructions,
+                        'etatDelVerif' => $etatDelVerif,
+                        'etatVerif2' => $etatVerif2,
+                        'etat' => $etat
+                    ]);
+                
                 return $this->response->setJSON([
                     'success' => true,
-                    'verification' => null,
-                    'pieces' => [],
-                    'motifs' => []
+                    'message' => 'Décision mise à jour avec succès'
                 ]);
             }
 
-            // 2. Récupérer les pièces vérifiées depuis tbl_verifcloture
-            $pieces = $db->query("
-                SELECT 
-                    vc.\"id_piece\",
-                    p.\"pj\"
-                FROM \"tbl_verifcloture\" vc
-                LEFT JOIN \"piece\" p ON vc.\"id_piece\" = p.\"id_piece\"
-                WHERE vc.\"engverifcloture\" = ?
-            ", [$numDef])->getResultArray();
-
-            // Formater les pièces avec checked = true
-            $formattedPieces = array_map(function($p) {
-                return [
-                    'id_piece' => $p['id_piece'],
-                    'pj' => $p['pj'] ?? 'Pièce',
-                    'checked' => true
-                ];
-            }, $pieces);
-
-            // 3. Récupérer les motifs sélectionnés depuis temp_motif
-            $motifIds = $db->query("
-                SELECT \"id_motif\" FROM \"temp_motif\" WHERE \"numDef\" = ?
-            ", [$numDef])->getResultArray();
-            $motifIds = array_column($motifIds, 'id_motif');
-
-            // 4. Récupérer tous les motifs pour les labels
-            $allMotifs = $db->table('motif')
-                ->orderBy('id_motif', 'ASC')
-                ->get()
-                ->getResultArray();
-
-            // Ajouter les motifs à la vérification
-            $verification['motif_ids'] = $motifIds;
+            // Insérer dans del_aller1
+            $db->table('del_aller1')->insert([
+                'numDef' => $numDef,
+                'loginReception' => $loginReception,
+                'dateReception' => $dateReception,
+                'loginClotureDel' => $loginClotureDel,
+                'dateClotureDel' => $dateClotureDel,
+                'decisionforme' => $decisionforme,
+                'decisionfond' => $decisionfond,
+                'decisionfinale' => $decisionfinale,
+                'decisionObs' => $decisionObs,
+                'instructions' => $instructions,
+                'etatDelVerif' => $etatDelVerif,
+                'etatVerif2' => $etatVerif2,
+                'etat' => $etat
+            ]);
 
             return $this->response->setJSON([
                 'success' => true,
-                'verification' => $verification,
-                'pieces' => $formattedPieces,
-                'motifs' => $allMotifs
+                'message' => 'Décision enregistrée avec succès'
             ]);
 
         } catch (\Exception $e) {
             return $this->response->setJSON([
                 'success' => false,
-                'error' => $e->getMessage()
+                'message' => $e->getMessage()
             ]);
         }
     }

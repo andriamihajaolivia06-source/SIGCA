@@ -198,6 +198,8 @@ CREATE TABLE "del_aller1" (
   "etat" INTEGER NOT NULL
 );
 
+ALTER TABLE del_aller1 ALTER COLUMN "decisionObs" TYPE VARCHAR(500);
+
 COMMENT ON TABLE "del_aller1" IS 'Structure de la table del_aller1';
 
 INSERT INTO "del_aller1" ("id_del", "numDef", "loginReception", "dateReception", "loginClotureDel", "dateClotureDel", "decisionforme", "decisionfond", "decisionfinale", "decisionObs", "instructions", "etatDelVerif", "etatVerif2", "etat") VALUES

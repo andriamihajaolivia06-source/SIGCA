@@ -82,3 +82,8 @@ export const getVerificationDetails = async (numDef) => {
   });
   return response.data;
 };
+
+export const saveDelegateDecision = async (data) => {
+  const response = await api.post("/delegate/save-decision", data);
+  return response.data;
+};

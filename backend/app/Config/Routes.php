@@ -35,3 +35,4 @@ $routes->get('api/delegate/received-engagements', 'DelegateController::getReceiv
 $routes->get('api/delegate/non-closed-secretary', 'DelegateController::getNonClosedBySecretary');
 $routes->get('api/delegate/non-closed-verificateur', 'DelegateController::getNonClosedByVerificateur');
 $routes->get('api/delegate/verification-details', 'DelegateController::getVerificationDetails');
+$routes->post('api/delegate/save-decision', 'DelegateController::saveDecision');

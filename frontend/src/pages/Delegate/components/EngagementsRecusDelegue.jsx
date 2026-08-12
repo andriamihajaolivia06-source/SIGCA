@@ -196,6 +196,7 @@ function EngagementsRecusDelegue({ user }) {
           <LireVerification
             engagement={selectedEngagement}
             onClose={handleCloseModal}
+            onSuccess={loadEngagements} 
           />
         </div>
       )}
