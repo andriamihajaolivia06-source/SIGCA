@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getVerificateurDelegations, searchClosedEngagements, receptionEngagements } from "../../services/verificateurService";
+import { getVerificateurDelegations, searchClosedEngagements, receptionEngagements, getDelegateDecisions, markDecisionAsRead } from "../../services/verificateurService";
 import logoDGCF from "../../assets/logo-dgcf.png";
 import DelegationSelector from "../Secretary/components/DelegationSelector";
 import VerificateurSidebar from "./components/VerificateurSidebar";
 import EngagementsRecus from "./components/EngagementsRecus";
+import NotificationModal from "./components/NotificationModal";
+import DecisionPdf from "./components/DecisionPdf";
 
 function VerificateurDashboard() {
   const navigate = useNavigate();
@@ -23,6 +25,13 @@ function VerificateurDashboard() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [receptionLoading, setReceptionLoading] = useState(false);
 
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [selectedDecision, setSelectedDecision] = useState(null);
+  const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+
   useEffect(() => {
     const userData = localStorage.getItem("user");
     if (!userData) {
@@ -33,6 +42,13 @@ function VerificateurDashboard() {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
     loadDelegations(parsedUser);
+    loadNotifications(parsedUser);
+    
+    const interval = setInterval(() => {
+      loadNotifications(parsedUser);
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, [navigate]);
 
   const loadDelegations = async (userData) => {
@@ -52,6 +68,50 @@ function VerificateurDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadNotifications = async (userData) => {
+    try {
+      const data = await getDelegateDecisions(
+        userData.immatricule,
+        userData.annee
+      );
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unread_count || 0);
+    } catch (error) {
+      console.error("Erreur chargement notifications:", error);
+    }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    try {
+      await markDecisionAsRead(notification.id_del);
+      setSelectedDecision(notification);
+      setShowDecisionModal(true);
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      loadNotifications(user);
+    } catch (error) {
+      console.error("Erreur lors du marquage:", error);
+    }
+  };
+
+  const handleCloseDecisionModal = () => {
+    setShowDecisionModal(false);
+    setSelectedDecision(null);
+    loadNotifications(user);
+  };
+
+  const handleCloseNotificationModal = () => {
+    setShowNotificationModal(false);
+    loadNotifications(user);
+  };
+
+  const handlePrint = () => {
+    setShowPdfModal(true);
+  };
+
+  const handleClosePdfModal = () => {
+    setShowPdfModal(false);
   };
 
   const handleDelegationChange = (delegation) => {
@@ -123,6 +183,7 @@ function VerificateurDashboard() {
     const dataToSend = {
       immatricule: user?.immatricule,
       annee: user?.annee,
+      cf_code: selectedDelegation?.cf_code || '',
       selectedEngagements: selectedData.map(item => ({
         id_secretaire: item.id_secretaire,
         numDef: item.numDef
@@ -138,15 +199,15 @@ function VerificateurDashboard() {
       const response = await receptionEngagements(dataToSend);
       
       if (response.success) {
-        alert(`✅ ${response.message}\n${response.total} engagement(s) réceptionné(s)`);
+        alert(`${response.message}\n${response.total} engagement(s) réceptionné(s)`);
         setSelectedItems([]);
         handleSearch();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de la réception:", error);
-      alert("❌ Erreur lors de la réception. Veuillez réessayer.");
+      alert("Erreur lors de la réception. Veuillez réessayer.");
     } finally {
       setReceptionLoading(false);
     }
@@ -172,11 +233,13 @@ function VerificateurDashboard() {
       "Cloturer": "bg-green-100 text-green-700",
       "En attente": "bg-yellow-100 text-yellow-700",
       "Rejete": "bg-red-100 text-red-700",
+      "Verifie": "bg-blue-100 text-blue-700",
+      "Noncloturer": "bg-yellow-100 text-yellow-700",
     };
     const color = colors[status] || "bg-gray-100 text-gray-700";
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {status || "Cloturer"}
+        {status || "En attente"}
       </span>
     );
   };
@@ -306,7 +369,6 @@ function VerificateurDashboard() {
                         </tbody>
                       </table>
                     </div>
-                    {/* Bouton Réception en bas */}
                     <div className="px-6 py-4 bg-gray-50/80 border-t border-gray-200 flex justify-end">
                       <button
                         onClick={handleReception}
@@ -357,13 +419,28 @@ function VerificateurDashboard() {
                   <p className="text-xs text-gray-300">SIG Contrôle A Priori</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium">
-                  {user?.nom} {user?.prenom}
-                </p>
-                <p className="text-xs text-gray-300">
-                  {user?.role} • Année {user?.annee}
-                </p>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowNotificationModal(true)}
+                  className="relative text-white hover:text-gray-300 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+                <div className="text-right">
+                  <p className="text-sm font-medium">
+                    {user?.nom} {user?.prenom}
+                  </p>
+                  <p className="text-xs text-gray-300">
+                    {user?.role} • Année {user?.annee}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -373,6 +450,118 @@ function VerificateurDashboard() {
           {renderContent()}
         </main>
       </div>
+
+      {/* Modal de notification */}
+      {showNotificationModal && (
+        <NotificationModal
+          notifications={notifications}
+          user={user}
+          onClose={handleCloseNotificationModal}
+          onNotificationClick={handleNotificationClick}
+          onRefresh={() => loadNotifications(user)}
+        />
+      )}
+
+      {/* Modal de décision */}
+      {showDecisionModal && selectedDecision && (
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-[#0B1F44]">Décision du Délégué</h3>
+              <button
+                onClick={handleCloseDecisionModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">N° DEF :</span>
+                <span className="text-gray-800">{selectedDecision.numDef || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">BDEF :</span>
+                <span className="text-gray-800">{selectedDecision.bdef || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Réf CF :</span>
+                <span className="text-gray-800">{selectedDecision.refCF || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Montant :</span>
+                <span className="text-gray-800 font-medium">
+                  {selectedDecision.montant ? Number(selectedDecision.montant).toLocaleString("fr-FR") + " Ar" : "0 Ar"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Objet :</span>
+                <span className="text-gray-800">{selectedDecision.objet || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Décision Forme :</span>
+                <span className="text-gray-800">{selectedDecision.decisionforme || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Décision Fond :</span>
+                <span className="text-gray-800">{selectedDecision.decisionfond || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Décision Finale :</span>
+                <span className="text-gray-800 font-medium text-[#0B1F44]">{selectedDecision.decisionfinale || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Observation :</span>
+                <span className="text-gray-800">{selectedDecision.decisionObs || "-"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Date réception :</span>
+                <span className="text-gray-800">{formatDate(selectedDecision.dateReception)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Date clôture :</span>
+                <span className="text-gray-800">{formatDate(selectedDecision.dateClotureDel)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-semibold text-gray-600">Clôturé par :</span>
+                <span className="text-gray-800">{selectedDecision.loginReception || "-"}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  alert("Fonction de clôture à implémenter");
+                }}
+                className="px-6 py-2 bg-[#6FAE4F] text-white rounded-lg hover:bg-[#5d9e3f] transition-colors"
+              >
+                Clôturer
+              </button>
+              <button
+                onClick={handlePrint}
+                className="px-6 py-2 bg-[#0B1F44] text-white rounded-lg hover:bg-[#122a5c] transition-colors"
+              >
+                Imprimer
+              </button>
+              <button
+                onClick={handleCloseDecisionModal}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal PDF */}
+      {showPdfModal && selectedDecision && (
+        <DecisionPdf
+          decision={selectedDecision}
+          onClose={handleClosePdfModal}
+        />
+      )}
     </div>
   );
 }

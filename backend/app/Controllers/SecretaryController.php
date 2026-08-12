@@ -328,10 +328,7 @@ class SecretaryController extends ResourceController
         }
     }
 
-    /**
-     * Valider les engagements sélectionnés
-     * POST /api/secretary/validate
-     */
+
     public function validateEngagements()
     {
         $data = $this->request->getJSON(true);
@@ -377,7 +374,7 @@ class SecretaryController extends ResourceController
             $loginReception = trim($user['im_utilisateur']);
             $dateReception = date('Y-m-d H:i:s');
 
-            // 1. Insérer l'email dans tbl_mail si fourni
+           
             if (!empty($email)) {
                 foreach ($selectedEngagements as $engagement) {
                     $existing = $db->table('tbl_mail')
@@ -396,7 +393,7 @@ class SecretaryController extends ResourceController
                 }
             }
 
-            // 2. Insérer les engagements dans secretaire_aller1
+            
             foreach ($selectedEngagements as $engagement) {
                 $numDef = $engagement['numDef'] ?? '';
 
@@ -448,10 +445,7 @@ class SecretaryController extends ResourceController
         }
     }
 
-    /**
-     * Récupérer les engagements validés pour l'envoi vers vérificateur
-     * GET /api/secretary/validated-engagements
-     */
+
     public function getValidatedEngagements()
     {
         $immatricule = $this->request->getGet('immatricule');
@@ -467,7 +461,7 @@ class SecretaryController extends ResourceController
         try {
             $db = db_connect();
 
-            // Récupérer l'utilisateur pour vérifier son login
+           
             $user = $db->query("
                 SELECT *
                 FROM user_multiple
@@ -486,7 +480,7 @@ class SecretaryController extends ResourceController
 
             $loginReception = trim($user['im_utilisateur']);
 
-            // Requête avec guillemets doubles pour PostgreSQL (case sensitive)
+           
             $query = "
                 SELECT 
                     sa.\"id_secretaire\",
@@ -530,10 +524,7 @@ class SecretaryController extends ResourceController
         }
     }
 
-    /**
-     * Clôturer les engagements vers le vérificateur
-     * POST /api/secretary/close-engagements
-     */
+
     public function closeEngagements()
     {
         $data = $this->request->getJSON(true);
@@ -619,7 +610,7 @@ class SecretaryController extends ResourceController
         try {
             $db = db_connect();
 
-            // Récupérer l'utilisateur pour vérifier son login
+            
             $user = $db->query("
                 SELECT *
                 FROM user_multiple
@@ -638,7 +629,7 @@ class SecretaryController extends ResourceController
 
             $loginReception = trim($user['im_utilisateur']);
 
-            // Requête pour récupérer les engagements clôturés
+           
             $query = "
                 SELECT 
                     sa.\"id_secretaire\",

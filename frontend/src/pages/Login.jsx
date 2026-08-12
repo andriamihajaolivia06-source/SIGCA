@@ -100,7 +100,7 @@ function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Année */}
+            {/* Annee */}
             <div>
               <label
                 htmlFor="annee"
@@ -168,7 +168,7 @@ function Login() {
               />
             </div>
 
-            {/* Rôle */}
+            {/* Role */}
             <div>
               <label
                 htmlFor="role"

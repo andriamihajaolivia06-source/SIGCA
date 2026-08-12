@@ -529,4 +529,131 @@ class VerificateurController extends ResourceController
             ]);
         }
     }
+
+        public function getDelegateDecisions()
+    {
+        $immatricule = $this->request->getGet('immatricule');
+        $annee = $this->request->getGet('annee');
+
+        if (!$immatricule || !$annee) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Immatricule et année requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            // Récupérer le login du vérificateur
+            $user = $db->query("
+                SELECT im_utilisateur, cf_code FROM user_multiple
+                WHERE TRIM(im_utilisateur) = ? AND TRIM(exercice) = ?
+                LIMIT 1
+            ", [$immatricule, $annee])->getRowArray();
+
+            if (!$user) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Utilisateur non trouvé'
+                ]);
+            }
+
+            $loginVerificateur = trim($user['im_utilisateur']);
+
+            // Récupérer les décisions du délégué pour les engagements que le vérificateur a vérifiés
+            // etatVerif2 = 0 : non lu, etatVerif2 = 1 : lu
+            $query = "
+                SELECT 
+                    d.\"id_del\",
+                    d.\"numDef\",
+                    d.\"loginReception\",
+                    d.\"dateReception\",
+                    d.\"loginClotureDel\",
+                    d.\"dateClotureDel\",
+                    d.\"decisionforme\",
+                    d.\"decisionfond\",
+                    d.\"decisionfinale\",
+                    d.\"decisionObs\",
+                    d.\"etatDelVerif\",
+                    d.\"etatVerif2\",
+                    d.\"etat\",
+                    e.\"bdef\",
+                    e.\"objet\",
+                    e.\"montant\",
+                    e.\"exercice\",
+                    sa.\"refCF\",
+                    sa.\"loginReception1\",
+                    sa.\"dateReception1\"
+                FROM \"del_aller1\" d
+                LEFT JOIN \"secretaire_aller1\" sa ON d.\"numDef\" = sa.\"numDef\"
+                LEFT JOIN \"engagement\" e ON d.\"numDef\" = e.\"numDef\"
+                LEFT JOIN \"verif_aller1\" v ON d.\"numDef\" = v.\"numDef\"
+                WHERE v.\"loginReception\" = ?
+                  AND e.\"exercice\" = ?
+                  AND d.\"etatDelVerif\" = 'Cloturer'
+                ORDER BY d.\"dateClotureDel\" DESC
+            ";
+
+            $results = $db->query($query, [$loginVerificateur, $annee])->getResultArray();
+
+            // Compter les non lus (etatVerif2 = 0)
+            $unreadCount = 0;
+            foreach ($results as $row) {
+                if ($row['etatVerif2'] == 0) {
+                    $unreadCount++;
+                }
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'notifications' => $results,
+                'unread_count' => $unreadCount,
+                'total' => count($results),
+                'login_verificateur' => $loginVerificateur
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Marquer une décision comme lue (etatVerif2 = 1)
+     * POST /api/verificateur/mark-decision-read
+     */
+    public function markDecisionRead()
+    {
+        $data = $this->request->getJSON(true);
+        $idDel = $data['id_del'] ?? null;
+
+        if (!$idDel) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'ID de la décision requis'
+            ]);
+        }
+
+        try {
+            $db = db_connect();
+
+            $db->table('del_aller1')
+                ->where('id_del', $idDel)
+                ->update(['etatVerif2' => 1]);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Notification marquée comme lue'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
 }

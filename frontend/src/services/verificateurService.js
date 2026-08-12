@@ -78,3 +78,15 @@ export const saveVerification = async (data) => {
   const response = await api.post("/verificateur/save-verification", data);
   return response.data;
 };
+
+export const getDelegateDecisions = async (immatricule, annee) => {
+  const response = await api.get("/verificateur/delegate-decisions", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const markDecisionAsRead = async (idDel) => {
+  const response = await api.post("/verificateur/mark-decision-read", { id_del: idDel });
+  return response.data;
+};

@@ -190,7 +190,7 @@ function EngagementsRecusDelegue({ user }) {
         </div>
       )}
 
-      {/* Modal pour afficher les détails de la vérification */}
+      {/* Modal pour afficher les details de la verification */}
       {showModal && selectedEngagement && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <LireVerification

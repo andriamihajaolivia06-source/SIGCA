@@ -98,8 +98,6 @@ class DelegateController extends ResourceController
 
             $cfCode = trim($delegation['cf_code']);
 
-            // Récupérer les engagements clôturés par le vérificateur (etatVerifDel = 'Cloturer')
-            // et qui n'ont pas encore été réceptionnés par le délégué
             $query = "
                 SELECT 
                     v.\"id_verif\",
@@ -168,10 +166,7 @@ class DelegateController extends ResourceController
         }
     }
 
-    /**
-     * Réceptionner les engagements sélectionnés
-     * POST /api/delegate/reception
-     */
+
     public function reception()
     {
         $data = $this->request->getJSON(true);
@@ -208,7 +203,7 @@ class DelegateController extends ResourceController
                     continue;
                 }
 
-                // Vérifier si déjà réceptionné
+                
                 $existing = $db->table('del_aller1')
                     ->where('numDef', $numDef)
                     ->get()
@@ -331,7 +326,7 @@ public function getNonClosedBySecretary()
             ]);
         }
 
-        // cf_code de user_multiple contient en réalité des id_delegation (ex: "47" ou "51,5")
+       
         $idDelegations = array_map('trim', explode(',', $user['cf_code']));
         $idDelegations = array_filter($idDelegations);
         $idDelegations = array_map('intval', $idDelegations);
@@ -486,7 +481,7 @@ public function getVerificationDetails()
     try {
         $db = db_connect();
 
-        // 1. Récupérer la vérification depuis verif_aller1
+       
         $verification = $db->query("
             SELECT 
                 v.\"id_verif\",
@@ -523,7 +518,7 @@ public function getVerificationDetails()
             ]);
         }
 
-        // 2a. Récupérer TOUTES les pièces requises pour le compte de l'engagement
+        
         $piecesRequises = $db->query("
             SELECT p.\"id_piece\", p.\"pj\"
             FROM \"piece\" p
@@ -531,13 +526,13 @@ public function getVerificationDetails()
             WHERE pc.\"compte\" = ?
         ", [$verification['compte']])->getResultArray();
 
-        // 2b. Récupérer les pièces déjà cochées (clôturées) pour cet engagement
+     
         $piecesCochees = $db->query("
             SELECT \"id_piece\" FROM \"tbl_verifcloture\" WHERE \"engverifcloture\" = ?
         ", [$numDef])->getResultArray();
         $idsCoches = array_column($piecesCochees, 'id_piece');
 
-        // 2c. Fusionner : chaque pièce requise, cochée ou non
+      
         $formattedPieces = array_map(function($p) use ($idsCoches) {
             return [
                 'id_piece' => $p['id_piece'],
@@ -546,19 +541,19 @@ public function getVerificationDetails()
             ];
         }, $piecesRequises);
 
-        // 3. Récupérer les motifs sélectionnés depuis temp_motif
+       
         $motifIds = $db->query("
             SELECT \"id_motif\" FROM \"temp_motif\" WHERE \"numDef\" = ?
         ", [$numDef])->getResultArray();
         $motifIds = array_column($motifIds, 'id_motif');
 
-        // 4. Récupérer tous les motifs pour les labels
+       
         $allMotifs = $db->table('motif')
             ->orderBy('id_motif', 'ASC')
             ->get()
             ->getResultArray();
 
-        // Ajouter les motifs à la vérification
+      
         $verification['motif_ids'] = $motifIds;
 
         return $this->response->setJSON([
@@ -604,17 +599,17 @@ public function saveDecision()
         try {
             $db = db_connect();
 
-            // Tronquer decisionObs à 20 caractères maximum
+          
             $decisionObs = mb_substr($decisionObs, 0, 20);
 
-            // Vérifier si l'engagement existe déjà dans del_aller1
+           
             $existing = $db->table('del_aller1')
                 ->where('numDef', $numDef)
                 ->get()
                 ->getRowArray();
 
             if ($existing) {
-                // Mettre à jour l'enregistrement existant
+               
                 $db->table('del_aller1')
                     ->where('numDef', $numDef)
                     ->update([
@@ -638,7 +633,7 @@ public function saveDecision()
                 ]);
             }
 
-            // Insérer dans del_aller1
+         
             $db->table('del_aller1')->insert([
                 'numDef' => $numDef,
                 'loginReception' => $loginReception,

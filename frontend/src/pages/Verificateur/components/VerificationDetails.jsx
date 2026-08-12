@@ -189,15 +189,15 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
       const response = await saveVerification(dataToSend);
       
       if (response.success) {
-        alert(`✅ Vérification enregistrée avec succès`);
+        alert(`Vérification enregistrée avec succès`);
         onSuccess();
         onClose();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de l'enregistrement:", error);
-      alert("❌ Erreur lors de l'enregistrement. Veuillez réessayer.");
+      alert("Erreur lors de l'enregistrement. Veuillez réessayer.");
     } finally {
       setSaving(false);
     }

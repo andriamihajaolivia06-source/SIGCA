@@ -141,15 +141,15 @@ function DelegateDashboard() {
       const response = await receptionEngagements(dataToSend);
       
       if (response.success) {
-        alert(`✅ ${response.message}\n${response.total} engagement(s) réceptionné(s)`);
+        alert(`${response.message}\n${response.total} engagement(s) réceptionné(s)`);
         setSelectedItems([]);
         handleSearch();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de la réception:", error);
-      alert("❌ Erreur lors de la réception. Veuillez réessayer.");
+      alert("Erreur lors de la réception. Veuillez réessayer.");
     } finally {
       setReceptionLoading(false);
     }
@@ -186,7 +186,7 @@ function DelegateDashboard() {
     );
   };
 
-  // Définition des onglets pour le navbar
+  
   const navTabs = [
     { id: "nonclotures_secretaire", label: "Non clôturés (Secrétaire)" },
     { id: "nonclotures_verificateur", label: "Non vérifiés (Vérificateur)" },
