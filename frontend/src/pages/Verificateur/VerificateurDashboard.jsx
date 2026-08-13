@@ -6,7 +6,7 @@ import DelegationSelector from "../Secretary/components/DelegationSelector";
 import VerificateurSidebar from "./components/VerificateurSidebar";
 import EngagementsRecus from "./components/EngagementsRecus";
 import NotificationModal from "./components/NotificationModal";
-import DecisionPdf from "./components/DecisionPdf";
+import ReceptionDelegue from "./components/ReceptionDelegue";
 
 function VerificateurDashboard() {
   const navigate = useNavigate();
@@ -30,7 +30,6 @@ function VerificateurDashboard() {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedDecision, setSelectedDecision] = useState(null);
   const [showDecisionModal, setShowDecisionModal] = useState(false);
-  const [showPdfModal, setShowPdfModal] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -104,14 +103,6 @@ function VerificateurDashboard() {
   const handleCloseNotificationModal = () => {
     setShowNotificationModal(false);
     loadNotifications(user);
-  };
-
-  const handlePrint = () => {
-    setShowPdfModal(true);
-  };
-
-  const handleClosePdfModal = () => {
-    setShowPdfModal(false);
   };
 
   const handleDelegationChange = (delegation) => {
@@ -388,6 +379,9 @@ function VerificateurDashboard() {
       case "recus":
         return <EngagementsRecus user={user} />;
 
+      case "reception_delegue":
+        return <ReceptionDelegue user={user} />;
+
       default:
         return null;
     }
@@ -531,36 +525,14 @@ function VerificateurDashboard() {
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
               <button
-                onClick={() => {
-                  alert("Fonction de clôture à implémenter");
-                }}
-                className="px-6 py-2 bg-[#6FAE4F] text-white rounded-lg hover:bg-[#5d9e3f] transition-colors"
-              >
-                Clôturer
-              </button>
-              <button
-                onClick={handlePrint}
-                className="px-6 py-2 bg-[#0B1F44] text-white rounded-lg hover:bg-[#122a5c] transition-colors"
-              >
-                Imprimer
-              </button>
-              <button
                 onClick={handleCloseDecisionModal}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2 bg-[#0B1F44] text-white rounded-lg hover:bg-[#122a5c] transition-colors"
               >
                 Fermer
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Modal PDF */}
-      {showPdfModal && selectedDecision && (
-        <DecisionPdf
-          decision={selectedDecision}
-          onClose={handleClosePdfModal}
-        />
       )}
     </div>
   );

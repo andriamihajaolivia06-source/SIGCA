@@ -1,10 +1,11 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import logoDGCF from "../../../assets/logo.jpg";
 
 function DecisionPdf({ decision, onClose }) {
   const pdfRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -29,28 +30,48 @@ function DecisionPdf({ decision, onClose }) {
     });
   };
 
-  const getDecisionLabel = (decision) => {
+  const getDecisionLabel = (decisionfinale) => {
     const labels = {
       "visa": "VISA",
       "rejet": "REJET",
       "faitretour": "FAIT RETOUR"
     };
-    return labels[decision?.toLowerCase()] || decision || "-";
+    return labels[decisionfinale?.toLowerCase()] || decisionfinale || "-";
   };
 
-  const getMotifLabel = (motif) => {
-    const labels = {
-      "approuver": "Approuvé",
-      "nonapprouver": "Non approuvé"
-    };
-    return labels[motif?.toLowerCase()] || motif || "-";
+  // Le motif affiché = la décision finale prise par le délégué (del_aller1.decisionfinale),
+  // accompagnée de son observation (del_aller1.decisionObs) si elle existe.
+  const buildMotifText = () => {
+    const label = getDecisionLabel(decision?.decisionfinale);
+    let text = `Décision finale du délégué : ${label}`;
+
+    if (decision?.decisionObs) {
+      text += `\n\nObservation du délégué :\n${decision.decisionObs}`;
+    }
+
+    return text;
   };
 
   const exportPDF = async () => {
     const element = pdfRef.current;
     if (!element) return;
 
+    setExporting(true);
     try {
+      // Attendre que la police soit prête, sinon le texte peut être mal mesuré
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+
+      // Attendre que le logo soit bien chargé avant la capture
+      const img = element.querySelector("img");
+      if (img && !img.complete) {
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -68,9 +89,13 @@ function DecisionPdf({ decision, onClose }) {
       pdf.save(`Decision_${decision?.numDef || "engagement"}.pdf`);
     } catch (error) {
       console.error("Erreur lors de l'export PDF:", error);
-      alert("Erreur lors de la génération du PDF");
+      alert("Erreur lors de la génération du PDF" + (error?.message ? " : " + error.message : ""));
+    } finally {
+      setExporting(false);
     }
   };
+
+  const motifText = buildMotifText();
 
   return (
     <div className="fixed inset-0 bg-black/50 z-70 flex items-center justify-center p-4">
@@ -80,9 +105,10 @@ function DecisionPdf({ decision, onClose }) {
           <div className="flex gap-2">
             <button
               onClick={exportPDF}
-              className="px-4 py-2 bg-[#0B1F44] text-white rounded-lg hover:bg-[#122a5c] transition-colors"
+              disabled={exporting}
+              className="px-4 py-2 bg-[#0B1F44] text-white rounded-lg hover:bg-[#122a5c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Exporter PDF
+              {exporting ? "Génération..." : "Exporter PDF"}
             </button>
             <button
               onClick={onClose}
@@ -93,30 +119,36 @@ function DecisionPdf({ decision, onClose }) {
           </div>
         </div>
 
-        {/* Contenu PDF */}
-        <div ref={pdfRef} className="bg-white p-8" style={{ width: "210mm", minHeight: "297mm" }}>
+        {/* Contenu PDF - couleurs en hex explicite (pas de classes Tailwind
+            gray-x ou black) pour éviter les erreurs html2canvas avec les
+            fonctions de couleur type oklch que certaines versions de Tailwind génèrent. */}
+        <div
+          ref={pdfRef}
+          className="p-8"
+          style={{ width: "210mm", minHeight: "297mm", backgroundColor: "#ffffff", color: "#000000" }}
+        >
           {/* En-tête avec logo */}
-          <div className="text-center border-b border-gray-300 pb-4 mb-6">
+          <div className="text-center pb-4 mb-6" style={{ borderBottom: "1px solid #d1d5db" }}>
             <div className="flex justify-center items-center mb-2">
-              <img 
-                src={logoDGCF} 
-                alt="Logo DGCF" 
-                className="h-50 w-50 object-contain"
+              <img
+                src={logoDGCF}
+                alt="Logo DGCF"
+                className="h-24 w-auto object-contain"
                 crossOrigin="anonymous"
               />
             </div>
-            {/* <div className="text-center">
+            <div className="text-center">
               <p className="text-sm font-bold uppercase">REPOBLIKANI MADAGASIKARA</p>
               <p className="text-sm">Fitavana - Tanindrazana - Fandrosoana</p>
               <p className="text-sm font-bold mt-1">MINISTERE DE L'ECONOMIE ET DES FINANCES</p>
-            </div> */}
+            </div>
           </div>
 
-          {/* Entete avec les informations */}
+          {/* Entête avec les informations */}
           <div className="flex justify-between items-start mb-8">
             <div>
               <p className="text-sm font-bold">DIRECTION GENERALE DU CONTROLE FINANCIER</p>
-              <p>---------------------------------------------------</p>
+              <p className="text-sm">---------------------------------------------------</p>
               <p className="text-sm font-bold">CONTROLE FINANCIER PRIMATURE</p>
             </div>
             <div className="text-right">
@@ -126,7 +158,7 @@ function DecisionPdf({ decision, onClose }) {
 
           {/* Titre principal */}
           <div className="text-center mb-8">
-            <h2 className="text-xl font-bold uppercase">
+            <h2 className="text-xl font-bold uppercase underline">
               {getDecisionLabel(decision?.decisionfinale)}
             </h2>
           </div>
@@ -150,16 +182,22 @@ function DecisionPdf({ decision, onClose }) {
             </div>
             <div>
               <p className="text-sm">
-                <span className="font-bold">Motifs :</span> 
-                <p>{decision?.decisionObs || "-"}</p>
+                <span className="font-bold">Motifs :</span>
               </p>
+              <div
+                className="mt-2 p-3 rounded-lg text-sm whitespace-pre-wrap"
+                style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }}
+              >
+                {motifText}
+              </div>
             </div>
           </div>
 
           {/* Signature */}
-          <div className="mt-12 pt-8 border-t border-gray-300">
+          <div className="mt-12 pt-8" style={{ borderTop: "1px solid #d1d5db" }}>
             <div className="text-right">
               <p className="text-sm font-bold">CONTROLE FINANCIER PRIMATURE</p>
+              <p className="text-sm mt-8">(Signature)</p>
             </div>
           </div>
         </div>
