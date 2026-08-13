@@ -116,3 +116,10 @@ export const receptionDelegueEngagements = async (data) => {
   const response = await api.post("/verificateur/reception-delegue", data);
   return response.data;
 };
+
+export const getReceivedDelegateEngagements = async (immatricule, annee) => {
+  const response = await api.get("/verificateur/received-delegate-engagements", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};

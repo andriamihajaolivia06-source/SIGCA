@@ -925,6 +925,12 @@ public function getDelegateClosedEngagements()
             WHERE e.\"cf_code\" IN ({$cfPlaceholders})
               AND e.\"exercice\" = ?
               AND d.\"etatDelVerif\" = 'Cloturer'
+              AND NOT EXISTS (
+                  SELECT 1 FROM \"verif_aller1\" v
+                  WHERE v.\"numDef\" = d.\"numDef\"
+                    AND v.\"loginReception2\" != ''
+                    AND v.\"loginReception2\" IS NOT NULL
+              )
         ";
 
         $params = [...$cfCodes, $annee];
@@ -1029,6 +1035,59 @@ public function receptionDelegue()
             'success' => true,
             'message' => 'Réception effectuée avec succès',
             'total' => $updatedCount
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+public function getReceivedDelegateEngagements()
+{
+    $immatricule = $this->request->getGet('immatricule');
+    $annee = $this->request->getGet('annee');
+
+    if (!$immatricule || !$annee) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Immatricule et année requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        $query = "
+            SELECT 
+                v.\"id_verif\",
+                v.\"numDef\",
+                v.\"loginReception2\",
+                v.\"dateReception2\",
+                v.\"decision\",
+                sa.\"refCF\",
+                e.\"bdef\",
+                e.\"objet\",
+                e.\"montant\",
+                e.\"exercice\"
+            FROM \"verif_aller1\" v
+            LEFT JOIN \"secretaire_aller1\" sa ON v.\"numDef\" = sa.\"numDef\"
+            LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
+            WHERE v.\"loginReception2\" IS NOT NULL
+              AND v.\"loginReception2\" != ''
+              AND v.\"loginReception2\" = ?
+              AND e.\"exercice\" = ?
+            ORDER BY v.\"dateReception2\" DESC
+        ";
+
+        $results = $db->query($query, [$immatricule, $annee])->getResultArray();
+
+        return $this->response->setJSON([
+            'success' => true,
+            'results' => $results,
+            'count' => count($results)
         ]);
 
     } catch (\Exception $e) {

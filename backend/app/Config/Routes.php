@@ -32,6 +32,7 @@ $routes->get('api/verificateur/engagement-full-details', 'VerificateurController
 $routes->get('verificateur/decision-motif-details', 'VerificateurController::getDecisionMotifDetails');
 $routes->get('api/verificateur/delegate-closed-engagements', 'VerificateurController::getDelegateClosedEngagements');
 $routes->post('api/verificateur/reception-delegue', 'VerificateurController::receptionDelegue');
+$routes->get('api/verificateur/received-delegate-engagements', 'VerificateurController::getReceivedDelegateEngagements');
 
 // Routes du délégué
 $routes->get('api/delegate/delegations', 'DelegateController::delegations');

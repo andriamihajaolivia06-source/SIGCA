@@ -7,6 +7,7 @@ import VerificateurSidebar from "./components/VerificateurSidebar";
 import EngagementsRecus from "./components/EngagementsRecus";
 import NotificationModal from "./components/NotificationModal";
 import ReceptionDelegue from "./components/ReceptionDelegue";
+import EngagementsRecusDelegue from "./components/EngagementsRecusDelegue";
 
 function VerificateurDashboard() {
   const navigate = useNavigate();
@@ -381,6 +382,9 @@ function VerificateurDashboard() {
 
       case "reception_delegue":
         return <ReceptionDelegue user={user} />;
+
+      case "recus_delegue":
+        return <EngagementsRecusDelegue user={user} />;
 
       default:
         return null;
