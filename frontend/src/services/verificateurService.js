@@ -123,3 +123,8 @@ export const getReceivedDelegateEngagements = async (immatricule, annee) => {
   });
   return response.data;
 };
+
+export const closeDelegateEngagement = async (data) => {
+  const response = await api.post("/verificateur/close-delegate-engagement", data);
+  return response.data;
+};

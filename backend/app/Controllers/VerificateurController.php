@@ -1067,6 +1067,8 @@ public function getReceivedDelegateEngagements()
                 v.\"loginReception2\",
                 v.\"dateReception2\",
                 v.\"decision\",
+                v.\"etatVerifDel\",
+                v.\"loginCloture2\",
                 sa.\"refCF\",
                 e.\"bdef\",
                 e.\"objet\",
@@ -1082,6 +1084,7 @@ public function getReceivedDelegateEngagements()
               AND v.\"loginReception2\" != ''
               AND v.\"loginReception2\" = ?
               AND e.\"exercice\" = ?
+              AND (v.\"loginCloture2\" IS NULL OR v.\"loginCloture2\" = '')
             ORDER BY v.\"dateReception2\" DESC
         ";
 
@@ -1131,6 +1134,71 @@ public function getDelegationByCfCode()
         return $this->response->setJSON([
             'success' => true,
             'delegation' => $delegation
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+public function closeDelegateEngagement()
+{
+    $data = $this->request->getJSON(true);
+
+    $idVerif = $data['idVerif'] ?? null;
+    $numDef = $data['numDef'] ?? null;
+    $immatricule = $data['immatricule'] ?? null;
+
+    if (!$idVerif || !$numDef || !$immatricule) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Données manquantes'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        // Vérifier si l'engagement existe
+        $verif = $db->table('verif_aller1')
+            ->select('loginCloture2')
+            ->where('id_verif', $idVerif)
+            ->get()
+            ->getRowArray();
+
+        if (!$verif) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Engagement non trouvé'
+            ]);
+        }
+
+        // Vérifier si déjà clôturé
+        if (!empty($verif['loginCloture2'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Cet engagement est déjà clôturé'
+            ]);
+        }
+
+        $dateCloture = date('Y-m-d H:i:s');
+
+        // Mettre à jour verif_aller1
+        $db->table('verif_aller1')
+            ->where('id_verif', $idVerif)
+            ->update([
+                'loginCloture2' => $immatricule,
+                'dateCloture2' => $dateCloture,
+                'etatVerifDel' => 'Cloturer',
+                'etatDel' => 1,
+                'etat' => 1
+            ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Engagement clôturé avec succès'
         ]);
 
     } catch (\Exception $e) {

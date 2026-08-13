@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
-import { getReceivedDelegateEngagements } from "../../../services/verificateurService";
+import { getReceivedDelegateEngagements, closeDelegateEngagement } from "../../../services/verificateurService";
 import DecisionPdf from "./DecisionPdf";
 
 function EngagementsRecusDelegue({ user }) {
   const [loading, setLoading] = useState(false);
   const [engagements, setEngagements] = useState([]);
   const [filteredEngagements, setFilteredEngagements] = useState([]);
-  const [filter, setFilter] = useState("all"); // all, visa, rejet, faitretour
+  const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // État pour la modal de clôture
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [selectedEngagement, setSelectedEngagement] = useState(null);
   const [closing, setClosing] = useState(false);
   
-  // État pour la modal PDF
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfDecision, setPdfDecision] = useState(null);
+  
+  // Utiliser un Set pour suivre les impressions pendant la session
+  const [printedEngagements, setPrintedEngagements] = useState(new Set());
 
   useEffect(() => {
     if (user) {
@@ -62,7 +63,21 @@ function EngagementsRecusDelegue({ user }) {
     setFilteredEngagements(filtered);
   }, [engagements, filter, searchTerm]);
 
+  const markAsPrinted = (numDef) => {
+    const updated = new Set(printedEngagements);
+    updated.add(numDef);
+    setPrintedEngagements(updated);
+  };
+
+  const hasBeenPrinted = (numDef) => {
+    return printedEngagements.has(numDef);
+  };
+
   const handleCloseClick = (engagement) => {
+    if (!hasBeenPrinted(engagement.numDef)) {
+      alert("⚠️ Vous devez d'abord imprimer cet engagement avant de pouvoir le clôturer.");
+      return;
+    }
     setSelectedEngagement(engagement);
     setShowCloseModal(true);
   };
@@ -72,7 +87,6 @@ function EngagementsRecusDelegue({ user }) {
 
     setClosing(true);
     try {
-      // Appel API pour clôturer l'engagement (met à jour etatVerifDel = 'Cloturer')
       const response = await closeDelegateEngagement({
         idVerif: selectedEngagement.id_verif,
         numDef: selectedEngagement.numDef,
@@ -80,35 +94,43 @@ function EngagementsRecusDelegue({ user }) {
       });
 
       if (response.success) {
-        alert("Engagement clôturé avec succès");
+        alert("✅ Engagement clôturé avec succès");
         setShowCloseModal(false);
         setSelectedEngagement(null);
-        loadEngagements(); // Rafraîchir la liste
+        loadEngagements();
       } else {
-        alert("Erreur lors de la clôture: " + (response.message || "Veuillez réessayer"));
+        alert("❌ Erreur lors de la clôture: " + (response.message || "Veuillez réessayer"));
       }
     } catch (error) {
       console.error("Erreur lors de la clôture:", error);
-      alert("Erreur lors de la clôture. Veuillez réessayer.");
+      alert("❌ Erreur lors de la clôture. Veuillez réessayer.");
     } finally {
       setClosing(false);
     }
   };
 
-const handlePrintClick = (engagement) => {
-  const decisionData = {
-    numDef: engagement.numDef,
-    refCF: engagement.refCF,
-    objet: engagement.objet,
-    decisionfinale: engagement.decision,
-    decisionObs: engagement.decisionObs || "", // Observation du délégué
-    montant: engagement.montant,
-    dateReception: engagement.dateReception2,
-    cf_code: engagement.cf_code
+  const handlePrintClick = (engagement) => {
+    const decisionData = {
+      numDef: engagement.numDef,
+      refCF: engagement.refCF,
+      objet: engagement.objet,
+      decisionfinale: engagement.decision,
+      decisionObs: engagement.decisionObs || "",
+      montant: engagement.montant,
+      dateReception: engagement.dateReception2,
+      cf_code: engagement.cf_code
+    };
+    setPdfDecision(decisionData);
+    setShowPdfModal(true);
   };
-  setPdfDecision(decisionData);
-  setShowPdfModal(true);
-};
+
+  const handlePdfClose = () => {
+    setShowPdfModal(false);
+    if (pdfDecision?.numDef) {
+      markAsPrinted(pdfDecision.numDef);
+    }
+    setPdfDecision(null);
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";
@@ -149,7 +171,7 @@ const handlePrintClick = (engagement) => {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B1F44]"></div>
-          <span className="ml-3 text-gray-500">Chargement des engagements reçus du délégué...</span>
+          <span className="ml-3 text-gray-500">Chargement...</span>
         </div>
       </div>
     );
@@ -245,17 +267,12 @@ const handlePrintClick = (engagement) => {
             <h3 className="text-lg font-semibold text-[#0B1F44]">
               Engagements reçus du délégué ({filteredEngagements.length})
             </h3>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">
-                Filtre actif: {filter === "all" ? "Tous" : filter}
-              </span>
-              <button
-                onClick={loadEngagements}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Rafraîchir
-              </button>
-            </div>
+            <button
+              onClick={loadEngagements}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Rafraîchir
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -273,56 +290,64 @@ const handlePrintClick = (engagement) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredEngagements.map((item) => (
-                  <tr key={item.id_verif} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-sm text-gray-700">
-                      {item.numDef || "-"}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-sm text-[#0B1F44]">
-                      {item.bdef || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {item.refCF || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate">
-                      {item.objet || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-[#0B1F44]">
-                      {formatMontant(item.montant)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {getDecisionBadge(item.decision)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDate(item.dateReception2)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleCloseClick(item)}
-                          className="px-3 py-1 bg-[#0B1F44] text-white text-xs rounded-lg hover:bg-[#122a5c] transition-colors"
-                        >
-                          Clôturer
-                        </button>
-                        <button
-                          onClick={() => handlePrintClick(item)}
-                          className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-300 transition-colors"
-                        >
-                          Imprimer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredEngagements.map((item) => {
+                  const isPrinted = hasBeenPrinted(item.numDef);
+                  
+                  return (
+                    <tr key={item.id_verif} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-sm text-gray-700">
+                        {item.numDef || "-"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-sm text-[#0B1F44]">
+                        {item.bdef || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {item.refCF || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate">
+                        {item.objet || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-[#0B1F44]">
+                        {formatMontant(item.montant)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {getDecisionBadge(item.decision)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {formatDate(item.dateReception2)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handlePrintClick(item)}
+                            className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                              isPrinted 
+                                ? "bg-green-100 text-green-700 hover:bg-green-200" 
+                                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            }`}
+                          >
+                            {isPrinted ? "✓ Imprimé" : "Imprimer"}
+                          </button>
+                          <button
+                            onClick={() => handleCloseClick(item)}
+                            disabled={!isPrinted}
+                            className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                              isPrinted 
+                                ? "bg-[#0B1F44] text-white hover:bg-[#122a5c]" 
+                                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            }`}
+                            title={!isPrinted ? "Veuillez d'abord imprimer" : "Clôturer"}
+                          >
+                            Clôturer
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-
-          {filteredEngagements.length < engagements.length && (
-            <div className="px-6 py-3 bg-gray-50/80 border-t border-gray-200 text-sm text-gray-500">
-              {filteredEngagements.length} résultat(s) affiché(s) sur {engagements.length} total
-            </div>
-          )}
         </div>
       )}
 
@@ -385,10 +410,7 @@ const handlePrintClick = (engagement) => {
       {showPdfModal && pdfDecision && (
         <DecisionPdf
           decision={pdfDecision}
-          onClose={() => {
-            setShowPdfModal(false);
-            setPdfDecision(null);
-          }}
+          onClose={handlePdfClose}
         />
       )}
     </div>

@@ -34,6 +34,7 @@ $routes->get('api/verificateur/delegate-closed-engagements', 'VerificateurContro
 $routes->post('api/verificateur/reception-delegue', 'VerificateurController::receptionDelegue');
 $routes->get('api/verificateur/received-delegate-engagements', 'VerificateurController::getReceivedDelegateEngagements');
 $routes->get('api/delegation/by-cfcode', 'VerificateurController::getDelegationByCfCode');
+$routes->post('api/verificateur/close-delegate-engagement', 'VerificateurController::closeDelegateEngagement');
 
 // Routes du délégué
 $routes->get('api/delegate/delegations', 'DelegateController::delegations');
