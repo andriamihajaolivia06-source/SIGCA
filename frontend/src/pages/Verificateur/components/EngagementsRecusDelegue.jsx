@@ -95,20 +95,20 @@ function EngagementsRecusDelegue({ user }) {
     }
   };
 
-  const handlePrintClick = (engagement) => {
-    // Construire l'objet décision pour le PDF
-    const decisionData = {
-      numDef: engagement.numDef,
-      refCF: engagement.refCF,
-      objet: engagement.objet,
-      decisionfinale: engagement.decision,
-      decisionObs: engagement.decision || "",
-      montant: engagement.montant,
-      dateReception: engagement.dateReception2
-    };
-    setPdfDecision(decisionData);
-    setShowPdfModal(true);
+const handlePrintClick = (engagement) => {
+  const decisionData = {
+    numDef: engagement.numDef,
+    refCF: engagement.refCF,
+    objet: engagement.objet,
+    decisionfinale: engagement.decision,
+    decisionObs: engagement.decisionObs || "", // Observation du délégué
+    montant: engagement.montant,
+    dateReception: engagement.dateReception2,
+    cf_code: engagement.cf_code
   };
+  setPdfDecision(decisionData);
+  setShowPdfModal(true);
+};
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";

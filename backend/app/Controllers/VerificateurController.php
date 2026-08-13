@@ -1071,10 +1071,13 @@ public function getReceivedDelegateEngagements()
                 e.\"bdef\",
                 e.\"objet\",
                 e.\"montant\",
-                e.\"exercice\"
+                e.\"exercice\",
+                e.\"cf_code\",
+                d.\"decisionObs\"
             FROM \"verif_aller1\" v
             LEFT JOIN \"secretaire_aller1\" sa ON v.\"numDef\" = sa.\"numDef\"
             LEFT JOIN \"engagement\" e ON v.\"numDef\" = e.\"numDef\"
+            LEFT JOIN \"del_aller1\" d ON v.\"numDef\" = d.\"numDef\"
             WHERE v.\"loginReception2\" IS NOT NULL
               AND v.\"loginReception2\" != ''
               AND v.\"loginReception2\" = ?
@@ -1088,6 +1091,46 @@ public function getReceivedDelegateEngagements()
             'success' => true,
             'results' => $results,
             'count' => count($results)
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+public function getDelegationByCfCode()
+{
+    $cfCode = $this->request->getGet('cf_code');
+
+    if (!$cfCode) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'cf_code requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        $delegation = $db->table('delegation')
+            ->select('id_delegation, cf_code, lib_delegation, abrev')
+            ->where('TRIM(cf_code)', trim($cfCode))
+            ->get()
+            ->getRowArray();
+
+        if (!$delegation) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Délégation non trouvée'
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'delegation' => $delegation
         ]);
 
     } catch (\Exception $e) {
