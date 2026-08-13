@@ -838,6 +838,7 @@ public function getEngagementFullDetails()
 }
 
 
+
 public function getDelegateClosedEngagements()
 {
     $immatricule = $this->request->getGet('immatricule');
@@ -867,10 +868,6 @@ public function getDelegateClosedEngagements()
             ]);
         }
 
-        // user_multiple.cf_code contient l'id_delegation (ou une liste séparée
-        // par des virgules), PAS le cf_code texte utilisé dans "engagement".
-        // Il faut résoudre les id_delegation vers les vrais cf_code via la
-        // table "delegation" (même logique que la méthode delegations()).
         $idDelegations = array_map('trim', explode(',', $user['cf_code']));
         $idDelegations = array_filter($idDelegations);
         $idDelegations = array_map('intval', $idDelegations);
@@ -928,10 +925,6 @@ public function getDelegateClosedEngagements()
             WHERE e.\"cf_code\" IN ({$cfPlaceholders})
               AND e.\"exercice\" = ?
               AND d.\"etatDelVerif\" = 'Cloturer'
-              AND NOT EXISTS (
-                  SELECT 1 FROM \"verif_aller1\" v
-                  WHERE v.\"numDef\" = d.\"numDef\"
-              )
         ";
 
         $params = [...$cfCodes, $annee];
@@ -967,97 +960,82 @@ public function getDelegateClosedEngagements()
     }
 }
 
-    /**
-     * Réceptionner les engagements clôturés par le délégué
-     * POST /api/verificateur/reception-delegue
-     */
-    public function receptionDelegue()
-    {
-        $data = $this->request->getJSON(true);
 
-        $immatricule = $data['immatricule'] ?? null;
-        $annee = $data['annee'] ?? null;
-        $selectedEngagements = $data['selectedEngagements'] ?? [];
+public function receptionDelegue()
+{
+    $data = $this->request->getJSON(true);
 
-        if (empty($selectedEngagements)) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Aucun engagement sélectionné'
-            ]);
-        }
+    $immatricule = $data['immatricule'] ?? null;
+    $annee = $data['annee'] ?? null;
+    $selectedEngagements = $data['selectedEngagements'] ?? [];
 
-        if (!$immatricule || !$annee) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Immatricule et année requis'
-            ]);
-        }
-
-        try {
-            $db = db_connect();
-
-            $insertedCount = 0;
-            $dateReception = date('Y-m-d H:i:s');
-
-            foreach ($selectedEngagements as $engagement) {
-                $idDel = $engagement['id_del'] ?? null;
-                $numDef = $engagement['numDef'] ?? '';
-                $idSecretaire = $engagement['id_secretaire'] ?? null;
-                $decisionFinale = $engagement['decisionfinale'] ?? '';
-                $dateClotureDel = $engagement['dateClotureDel'] ?? null;
-
-                if (!$idDel || !$numDef) {
-                    continue;
-                }
-
-                // Vérifier si déjà réceptionné
-                $existing = $db->table('verif_aller1')
-                    ->where('numDef', $numDef)
-                    ->get()
-                    ->getRowArray();
-
-                if (!$existing) {
-                    // Insérer dans verif_aller1 avec les données du délégué
-                    $db->table('verif_aller1')->insert([
-                        'id_secretaire'   => $idSecretaire ?? 0,
-                        'numDef'          => $numDef,
-                        'loginReception'  => '',  // Login du vérificateur original (vide car c'est une réception délégué)
-                        'dateReception'   => null, // Date de réception du vérificateur original (null)
-                        'forme'           => '',
-                        'fond'            => '',
-                        'proposition'     => '',
-                        'observations'    => '',
-                        'loginCloture'    => '', // Login du vérificateur original (vide)
-                        'dateCloture'     => null, // Date de clôture du vérificateur original (null)
-                        'etatVerifDel'    => 'Noncloturer',
-                        'etatDel'         => 0,
-                        'loginReception2' => $immatricule, // Login du vérificateur qui réceptionne
-                        'dateReception2'  => $dateReception, // Date de réception actuelle
-                        'loginCloture2'   => $immatricule, // Login du vérificateur qui clôture
-                        'dateCloture2'    => $dateClotureDel ?? $dateReception, // Date de clôture du délégué
-                        'decision'        => $decisionFinale, // Décision finale du délégué
-                        'etatVerifSec2'   => '',
-                        'etatSec2'        => 0,
-                        'etatVerifSig'    => '',
-                        'etatSigfp'       => 0,
-                        'etat'            => 0
-                    ]);
-                    $insertedCount++;
-                }
-            }
-
-            return $this->response->setJSON([
-                'success' => true,
-                'message' => 'Réception effectuée avec succès',
-                'total' => $insertedCount
-            ]);
-
-        } catch (\Exception $e) {
-            return $this->response->setJSON([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
+    if (empty($selectedEngagements)) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Aucun engagement sélectionné'
+        ]);
     }
 
+    if (!$immatricule || !$annee) {
+        return $this->response->setJSON([
+            'success' => false,
+            'message' => 'Immatricule et année requis'
+        ]);
+    }
+
+    try {
+        $db = db_connect();
+
+        $updatedCount = 0;
+        $dateReception = date('Y-m-d H:i:s');
+
+        foreach ($selectedEngagements as $engagement) {
+            $numDef = $engagement['numDef'] ?? '';
+            $decisionFinale = $engagement['decisionfinale'] ?? '';
+
+            if (!$numDef) {
+                continue;
+            }
+
+            // Vérifier si l'enregistrement existe dans verif_aller1
+            $existing = $db->query(
+                'SELECT * FROM "verif_aller1" WHERE "numDef" = ?',
+                [$numDef]
+            )->getRowArray();
+
+            if (!$existing) {
+                continue;
+            }
+
+            // Mettre à jour loginReception2, dateReception2 et decision
+            $db->query("
+                UPDATE \"verif_aller1\" 
+                SET 
+                    \"loginReception2\" = ?,
+                    \"dateReception2\" = ?,
+                    \"decision\" = ?
+                WHERE \"numDef\" = ?
+            ", [
+                $immatricule,
+                $dateReception,
+                $decisionFinale,
+                $numDef
+            ]);
+
+            $updatedCount++;
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Réception effectuée avec succès',
+            'total' => $updatedCount
+        ]);
+
+    } catch (\Exception $e) {
+        return $this->response->setJSON([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
 }

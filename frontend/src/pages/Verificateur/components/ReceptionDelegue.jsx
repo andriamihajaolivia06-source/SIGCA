@@ -4,28 +4,42 @@ import { getDelegateClosedEngagements, receptionDelegueEngagements } from "../..
 function ReceptionDelegue({ user }) {
   const [loading, setLoading] = useState(false);
   const [engagements, setEngagements] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("%");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
   const [receptionLoading, setReceptionLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
+    // Initialiser hasSearched à true dès que user est disponible
     if (user) {
+      setHasSearched(true);
       handleSearch();
     }
   }, [user]);
 
   const handleSearch = async () => {
-    if (!user) return;
+    if (!user) {
+      console.warn("ReceptionDelegue: user non disponible");
+      return;
+    }
 
     setLoading(true);
-    setHasSearched(true);
+    setHasSearched(true); // ← Mettre à true AVANT la requête
     try {
+      const searchValue = searchTerm.trim() === "" ? "%" : searchTerm;
+      console.log("ReceptionDelegue - recherche avec:", {
+        immatricule: user?.immatricule,
+        annee: user?.annee,
+        search: searchValue
+      });
+      
       const data = await getDelegateClosedEngagements(
         user?.immatricule,
         user?.annee,
-        searchTerm || '%'
+        searchValue
       );
+      
+      console.log("ReceptionDelegue - résultats:", data);
       setEngagements(data.results || []);
       setSelectedItems([]);
     } catch (error) {
@@ -60,50 +74,50 @@ function ReceptionDelegue({ user }) {
     }
   };
 
-  const handleReception = async () => {
+const handleReception = async () => {
     if (selectedItems.length === 0) {
-      alert("Veuillez sélectionner au moins un engagement");
-      return;
+        alert("Veuillez sélectionner au moins un engagement");
+        return;
     }
 
     const selectedData = engagements.filter(item => 
-      selectedItems.includes(item.id_del)
+        selectedItems.includes(item.id_del)
     );
 
     const dataToSend = {
-      immatricule: user?.immatricule,
-      annee: user?.annee,
-      selectedEngagements: selectedData.map(item => ({
-        id_del: item.id_del,
-        numDef: item.numDef,
-        id_secretaire: item.id_secretaire,
-        decisionfinale: item.decisionfinale,
-        dateClotureDel: item.dateClotureDel
-      }))
+        immatricule: user?.immatricule,
+        annee: user?.annee,
+        selectedEngagements: selectedData.map(item => ({
+            id_del: item.id_del,
+            numDef: item.numDef,
+            id_secretaire: item.id_secretaire,
+            decisionfinale: item.decisionfinale,
+            dateClotureDel: item.dateClotureDel
+        }))
     };
 
     if (!window.confirm(`Confirmer la réception de ${selectedItems.length} engagement(s) clôturé(s) par le délégué ?`)) {
-      return;
+        return;
     }
 
     setReceptionLoading(true);
     try {
-      const response = await receptionDelegueEngagements(dataToSend);
-      
-      if (response.success) {
-        alert(`✅ ${response.message}\n${response.total} engagement(s) réceptionné(s)`);
-        setSelectedItems([]);
-        handleSearch();
-      } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
-      }
+        const response = await receptionDelegueEngagements(dataToSend);
+        
+        if (response.success) {
+            alert(`✅ ${response.message}\n${response.total} engagement(s) réceptionné(s)`);
+            setSelectedItems([]);
+            handleSearch(); // Rafraîchir la liste
+        } else {
+            alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        }
     } catch (error) {
-      console.error("Erreur lors de la réception:", error);
-      alert("❌ Erreur lors de la réception. Veuillez réessayer.");
+        console.error("Erreur lors de la réception:", error);
+        alert("❌ Erreur lors de la réception. Veuillez réessayer.");
     } finally {
-      setReceptionLoading(false);
+        setReceptionLoading(false);
     }
-  };
+};
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";
@@ -123,16 +137,31 @@ function ReceptionDelegue({ user }) {
   const getStatusBadge = (status) => {
     const colors = {
       "Cloturer": "bg-green-100 text-green-700",
+      "visa": "bg-green-100 text-green-700",
+      "rejet": "bg-red-100 text-red-700",
+      "faitretour": "bg-yellow-100 text-yellow-700",
     };
     const color = colors[status] || "bg-gray-100 text-gray-700";
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {status || "Cloturer"}
+        {status || "-"}
       </span>
     );
   };
 
-  if (loading && engagements.length === 0 && hasSearched) {
+  // Si user n'est pas encore chargé
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B1F44]"></div>
+          <span className="ml-3 text-gray-500">Chargement de l'utilisateur...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && engagements.length === 0 && !hasSearched) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -154,7 +183,7 @@ function ReceptionDelegue({ user }) {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Entrez % pour tout afficher ou un terme de recherche..."
+                placeholder="Entrez un terme de recherche (laissez vide pour tout afficher)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -169,17 +198,22 @@ function ReceptionDelegue({ user }) {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-1">
-              Utilisez % pour afficher tous les engagements clôturés par le délégué
+              Laissez vide pour afficher tous les engagements clôturés par le délégué
             </p>
           </div>
         </div>
       </div>
 
-      {hasSearched && (
+      {hasSearched ? (
         <>
           {engagements.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-              <p className="text-gray-500">Aucun engagement clôturé par le délégué trouvé.</p>
+              <p className="text-gray-500">
+                Aucun engagement clôturé par le délégué trouvé.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Les engagements déjà réceptionnés par le vérificateur ne sont pas affichés.
+              </p>
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -262,6 +296,13 @@ function ReceptionDelegue({ user }) {
             </div>
           )}
         </>
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B1F44]"></div>
+            <span className="ml-3 text-gray-500">Chargement...</span>
+          </div>
+        </div>
       )}
     </div>
   );
