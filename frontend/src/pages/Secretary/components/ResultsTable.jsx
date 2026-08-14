@@ -95,7 +95,7 @@ function ResultsTable({
           </div>
           <div className="flex items-center gap-3">
             {/* <span className="text-sm text-gray-500 whitespace-nowrap">
-              {selectedItems.length} sélectionné{selectedItems.length > 1 ? "s" : ""}
+              {selectedItems.length} selectionne{selectedItems.length > 1 ? "s" : ""}
             </span> */}
             <button
               onClick={onValidate}

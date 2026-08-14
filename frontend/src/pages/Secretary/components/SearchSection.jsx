@@ -79,7 +79,7 @@ function SearchSection({
         )}
       </div>
 
-      {/* Message d'information au lieu des résultats */}
+      {/* Message d'information au lieu des resultats */}
       <div className="border-t border-gray-100 px-6 py-4 text-center text-sm text-gray-500">
         {results.length > 0 
           ? `${results.length} résultat(s) trouvé(s). Consultez le tableau ci-dessous.`

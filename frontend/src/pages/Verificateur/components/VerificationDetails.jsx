@@ -19,6 +19,8 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
   const [propositionFaitRetour, setPropositionFaitRetour] = useState(false);
   const [propositionTexte, setPropositionTexte] = useState("");
 
+  const RAS_MOTIF_ID = 2;
+
   useEffect(() => {
     if (engagement) {
       loadData();
@@ -51,10 +53,14 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
     const newPieces = [...pieces];
     newPieces[index].checked = !newPieces[index].checked;
     setPieces(newPieces);
-    
-    const allChecked = newPieces.every(p => p.checked);
-    setAllPiecesChecked(allChecked);
   };
+
+  // Forme dérivée des pièces justificatives
+  useEffect(() => {
+    const allChecked = pieces.every(p => p.checked);
+    setAllPiecesChecked(allChecked);
+    setFormeStatus(allChecked ? 'complet' : 'incomplet');
+  }, [pieces]);
 
   const setPropositionExclusive = (type) => {
     setPropositionVisa(type === 'visa');
@@ -62,6 +68,43 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
     setPropositionFaitRetour(type === 'faitretour');
   };
 
+  // Proposition automatique selon forme + fond
+  useEffect(() => {
+    if (formeStatus === 'complet' && fondStatus === 'normal') {
+      setPropositionExclusive('visa');
+    } else if (formeStatus === 'incomplet' && fondStatus === 'normal') {
+      setPropositionExclusive('faitretour');
+    } else if (fondStatus === 'anormal') {
+      setPropositionExclusive('rejet');
+    }
+  }, [formeStatus, fondStatus]);
+
+  const handleMotifToggle = (motifId) => {
+    const id = Number(motifId);
+    setSelectedMotifIds(prev => {
+      const newSelection = prev.includes(id)
+        ? prev.filter(existingId => existingId !== id)
+        : [...prev, id];
+
+      // RaS sélectionné seul -> Normal
+      // Autre motif que RaS sélectionné -> Anormal
+      if (newSelection.some(selectedId => selectedId !== RAS_MOTIF_ID)) {
+        setFondStatus('anormal');
+      } else if (newSelection.includes(RAS_MOTIF_ID)) {
+        setFondStatus('normal');
+      } else {
+        setFondStatus(null);
+      }
+
+      return newSelection;
+    });
+  };
+
+  const isMotifChecked = (motifId) => {
+    return selectedMotifIds.includes(Number(motifId));
+  };
+
+  // Gestion manuelle de la forme (permet à l'utilisateur de modifier)
   const handleFormeChange = (value) => {
     if (value === 'complet') {
       const allChecked = pieces.every(p => p.checked);
@@ -69,46 +112,15 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
         alert("Toutes les pièces justificatives doivent être cochées pour valider 'Complet'");
         return;
       }
-    }
-    if (formeStatus === value) {
-      setFormeStatus(null);
-    } else {
-      setFormeStatus(value);
-      if (value === 'incomplet') {
-        setPropositionExclusive('faitretour');
-      }
+      setFormeStatus('complet');
+    } else if (value === 'incomplet') {
+      setFormeStatus('incomplet');
     }
   };
 
-  const handleMotifToggle = (motifId) => {
-    setSelectedMotifIds(prev => {
-      if (prev.includes(motifId)) {
-        return prev.filter(id => id !== motifId);
-      } else {
-        if (motifId === 2) {
-          setFondStatus('normal');
-          setPropositionExclusive('visa');
-        }
-        return [...prev, motifId];
-      }
-    });
-  };
-
-  const isMotifChecked = (motifId) => {
-    return selectedMotifIds.includes(motifId);
-  };
-
-  const handleFondStatusChange = (value) => {
-    if (fondStatus === value) {
-      setFondStatus(null);
-    } else {
-      setFondStatus(value);
-      if (value === 'anormal') {
-        setPropositionExclusive('rejet');
-      } else if (value === 'normal') {
-        setPropositionExclusive('visa');
-      }
-    }
+  // Gestion manuelle du fond (permet à l'utilisateur de modifier)
+  const handleFondChange = (value) => {
+    setFondStatus(value);
   };
 
   const handlePropositionChange = (type, checked) => {
@@ -189,15 +201,15 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
       const response = await saveVerification(dataToSend);
       
       if (response.success) {
-        alert(`✅ Vérification enregistrée avec succès`);
+        alert(`Vérification enregistrée avec succès`);
         onSuccess();
         onClose();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de l'enregistrement:", error);
-      alert("❌ Erreur lors de l'enregistrement. Veuillez réessayer.");
+      alert("Erreur lors de l'enregistrement. Veuillez réessayer.");
     } finally {
       setSaving(false);
     }
@@ -258,7 +270,6 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
                 checked={formeStatus === 'complet'}
                 onChange={() => handleFormeChange('complet')}
                 className="w-4 h-4 rounded border-gray-300 text-[#6FAE4F] focus:ring-[#6FAE4F]"
-                disabled={!allPiecesChecked}
               />
               <span>Complet</span>
             </label>
@@ -272,6 +283,9 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
               <span>Incomplet</span>
             </label>
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {allPiecesChecked ? "✓ Toutes les pièces sont cochées" : "✗ Certaines pièces ne sont pas cochées"}
+          </p>
         </div>
       </div>
 
@@ -292,7 +306,7 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
                   />
                   <span className={isMotifChecked(motif.id_motif) ? "text-gray-700" : "text-gray-400"}>
                     {motif.lib_motif}
-                    {motif.id_motif === 2 && " (Rien à signaler)"}
+                    {Number(motif.id_motif) === RAS_MOTIF_ID && " (Rien à signaler)"}
                   </span>
                 </label>
               ))}
@@ -303,7 +317,7 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
               <input
                 type="checkbox"
                 checked={fondStatus === 'normal'}
-                onChange={() => handleFondStatusChange('normal')}
+                onChange={() => handleFondChange('normal')}
                 className="w-4 h-4 rounded border-gray-300 text-[#6FAE4F] focus:ring-[#6FAE4F]"
               />
               <span>Normal</span>
@@ -312,12 +326,17 @@ function VerificationDetails({ engagement, onClose, onSuccess }) {
               <input
                 type="checkbox"
                 checked={fondStatus === 'anormal'}
-                onChange={() => handleFondStatusChange('anormal')}
+                onChange={() => handleFondChange('anormal')}
                 className="w-4 h-4 rounded border-gray-300 text-[#6FAE4F] focus:ring-[#6FAE4F]"
               />
               <span>Anormal</span>
             </label>
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {selectedMotifIds.includes(RAS_MOTIF_ID) ? "✓ RaS sélectionné → Normal" : 
+             selectedMotifIds.length > 0 ? "✗ Autre motif → Anormal" : 
+             "Aucun motif sélectionné"}
+          </p>
         </div>
       </div>
 

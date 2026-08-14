@@ -26,6 +26,15 @@ $routes->get('api/verificateur/received-engagements', 'VerificateurController::g
 $routes->get('api/verificateur/engagement-details', 'VerificateurController::getEngagementDetails');
 $routes->get('api/verificateur/motifs', 'VerificateurController::getMotifs');
 $routes->post('api/verificateur/save-verification', 'VerificateurController::saveVerification');
+$routes->get('api/verificateur/delegate-decisions', 'VerificateurController::getDelegateDecisions');
+$routes->post('api/verificateur/mark-decision-read', 'VerificateurController::markDecisionRead');
+$routes->get('api/verificateur/engagement-full-details', 'VerificateurController::getEngagementFullDetails');
+$routes->get('verificateur/decision-motif-details', 'VerificateurController::getDecisionMotifDetails');
+$routes->get('api/verificateur/delegate-closed-engagements', 'VerificateurController::getDelegateClosedEngagements');
+$routes->post('api/verificateur/reception-delegue', 'VerificateurController::receptionDelegue');
+$routes->get('api/verificateur/received-delegate-engagements', 'VerificateurController::getReceivedDelegateEngagements');
+$routes->get('api/delegation/by-cfcode', 'VerificateurController::getDelegationByCfCode');
+$routes->post('api/verificateur/close-delegate-engagement', 'VerificateurController::closeDelegateEngagement');
 
 // Routes du délégué
 $routes->get('api/delegate/delegations', 'DelegateController::delegations');

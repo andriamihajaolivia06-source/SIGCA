@@ -14,6 +14,14 @@ function VerificateurSidebar({ activeTab, onTabChange }) {
       id: "recus",
       label: "Engagements reçus",
     },
+    {
+      id: "reception_delegue",
+      label: "Réception Délégué",
+    },
+    {
+      id: "recus_delegue",
+      label: "Reçus du Délégué",
+    },
   ];
 
   const handleTabClick = (tabId) => {

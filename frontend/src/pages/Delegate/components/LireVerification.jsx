@@ -202,15 +202,15 @@ function LireVerification({ engagement, onClose, onSuccess }) {
       const response = await saveDelegateDecision(dataToSend);
       
       if (response.success) {
-        alert(`✅ ${response.message}`);
+        alert(`${response.message}`);
         if (onSuccess) onSuccess();
         onClose();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de l'enregistrement:", error);
-      alert("❌ Erreur lors de l'enregistrement. Veuillez réessayer.");
+      alert("Erreur lors de l'enregistrement. Veuillez réessayer.");
     } finally {
       setSaving(false);
     }

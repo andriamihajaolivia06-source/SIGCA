@@ -89,15 +89,15 @@ function EnvoiVerificateur({ user }) {
       const response = await closeEngagements(dataToSend);
       
       if (response.success) {
-        alert(`✅ ${response.message}\n${response.total} engagement(s) clôturé(s)`);
+        alert(`${response.message}\n${response.total} engagement(s) clôturé(s)`);
         setSelectedItems([]);
         loadEngagements();
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de la clôture:", error);
-      alert("❌ Erreur lors de la clôture. Veuillez réessayer.");
+      alert("Erreur lors de la clôture. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }

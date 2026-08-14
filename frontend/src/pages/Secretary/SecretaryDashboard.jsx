@@ -200,7 +200,7 @@ function SecretaryDashboard() {
       const response = await validateEngagements(dataToSend);
       
       if (response.success) {
-        alert(`✅ ${response.message}\n${response.total} engagement(s) validé(s)`);
+        alert(`${response.message}\n${response.total} engagement(s) validé(s)`);
         setSelectedItems([]);
         setDisplayedResults([]);
         setEmail("");
@@ -209,11 +209,11 @@ function SecretaryDashboard() {
         setBdefSearch("");
         setDefSearch("");
       } else {
-        alert(`❌ Erreur: ${response.message || 'Une erreur est survenue'}`);
+        alert(`Erreur: ${response.message || 'Une erreur est survenue'}`);
       }
     } catch (error) {
       console.error("Erreur lors de la validation:", error);
-      alert("❌ Erreur lors de la validation. Veuillez réessayer.");
+      alert("Erreur lors de la validation. Veuillez réessayer.");
     }
   };
 

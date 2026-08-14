@@ -78,3 +78,53 @@ export const saveVerification = async (data) => {
   const response = await api.post("/verificateur/save-verification", data);
   return response.data;
 };
+
+export const getDelegateDecisions = async (immatricule, annee) => {
+  const response = await api.get("/verificateur/delegate-decisions", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const markDecisionAsRead = async (idDel) => {
+  const response = await api.post("/verificateur/mark-decision-read", { id_del: idDel });
+  return response.data;
+};
+
+export const getEngagementFullDetails = async (numDef) => {
+  const response = await api.get("/verificateur/engagement-full-details", {
+    params: { numDef }
+  });
+  return response.data;
+};
+
+export const getDecisionMotifDetails = async (numDef) => {
+  const response = await api.get("/verificateur/decision-motif-details", {
+    params: { numDef }
+  });
+  return response.data;
+};
+
+export const getDelegateClosedEngagements = async (immatricule, annee, search) => {
+  const response = await api.get("/verificateur/delegate-closed-engagements", {
+    params: { immatricule, annee, search: search || '%' }
+  });
+  return response.data;
+};
+
+export const receptionDelegueEngagements = async (data) => {
+  const response = await api.post("/verificateur/reception-delegue", data);
+  return response.data;
+};
+
+export const getReceivedDelegateEngagements = async (immatricule, annee) => {
+  const response = await api.get("/verificateur/received-delegate-engagements", {
+    params: { immatricule, annee }
+  });
+  return response.data;
+};
+
+export const closeDelegateEngagement = async (data) => {
+  const response = await api.post("/verificateur/close-delegate-engagement", data);
+  return response.data;
+};

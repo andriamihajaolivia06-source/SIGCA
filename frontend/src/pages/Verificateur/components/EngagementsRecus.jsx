@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getReceivedEngagements } from "../../../services/verificateurService";
-import VerificationDetails from "./VerificationDetails";  // AJOUT DE L'IMPORT
+import VerificationDetails from "./VerificationDetails"; 
 
 function EngagementsRecus({ user }) {
   const [loading, setLoading] = useState(false);
